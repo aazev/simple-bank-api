@@ -1,0 +1,35 @@
+===================================================
+LOCAL DATABASE - SETUP
+===================================================
+
+---------------------------------------------------
+# Cleaning previous logs
+---------------------------------------------------
+
+---------------------------------------------------
+# Starting the Local Environment
+---------------------------------------------------
+make[1]: Entering directory '/home/aazev/projects/rust/simple_bank_api'
+docker compose -f .container/docker-compose.yml up -d
+Container container-simple_bank_api-db-1  Running
+Container container-simple_bank_api-glelasticsearch-1  Running
+Container container-simple_bank_api-glmongo-1  Running
+Container container-simple_bank_api-rabbitmq-1  Running
+Container container-simple_bank_api-graylog-1  Running
+make[1]: Leaving directory '/home/aazev/projects/rust/simple_bank_api'
+
+---------------------------------------------------
+# Reseting the Database
+---------------------------------------------------
+fd81c17bc102
+ pg_terminate_backend 
+----------------------
+(0 rows)
+
+DROP DATABASE
+CREATE DATABASE
+GRANT
+
+---------------------------------------------------
+# Your database is set and ready to receive data!
+---------------------------------------------------

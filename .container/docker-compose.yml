@@ -1,0 +1,57 @@
+version: "3.8"
+
+services:
+  simple_bank_api-db:
+    image: postgres:latest
+    restart: unless-stopped
+    user: 1000:1000
+    environment:
+      POSTGRES_PASSWORD: fh0xm1
+      POSTGRES_USER: api_agent_user
+      POSTGRES_DB: simple_bank_api
+    ports:
+      - 5432:5432
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    networks:
+      - simple_bank_api-devenv-network
+    command: >
+      -c max_connections=250
+      -c superuser_reserved_connections=3
+      -c shared_buffers='80 MB'
+      -c work_mem='128 MB'
+      -c maintenance_work_mem='420 MB'
+      -c huge_pages=off
+      -c effective_cache_size='11 GB'
+      -c effective_io_concurrency=100
+      -c random_page_cost=1.25
+      -c track_io_timing=on
+      -c track_functions=pl
+      -c wal_level=replica
+      -c max_wal_senders=0
+      -c synchronous_commit=off
+      -c checkpoint_timeout='15 min'
+      -c checkpoint_completion_target=0.9
+      -c max_wal_size='10240 MB'
+      -c min_wal_size='5120 MB'
+      -c wal_compression=on
+      -c wal_buffers=-1
+      -c bgwriter_delay=200ms
+      -c bgwriter_lru_maxpages=100
+      -c bgwriter_lru_multiplier=2.0
+      -c bgwriter_flush_after=0
+      -c max_worker_processes=8
+      -c max_parallel_workers_per_gather=4
+      -c max_parallel_maintenance_workers=4
+      -c max_parallel_workers=8
+      -c parallel_leader_participation=on
+      -c enable_partitionwise_join=on
+      -c enable_partitionwise_aggregate=on
+      -c jit=on
+
+volumes:
+  simple_bank_api-postgres-data:
+
+networks:
+  simple_bank_api-devenv-network:
+    driver: bridge
