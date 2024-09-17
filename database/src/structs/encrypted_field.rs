@@ -1,4 +1,6 @@
+use cipher::InvalidLength;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedField<T> {
@@ -15,4 +17,14 @@ impl<T> EncryptedField<T> {
             _marker: std::marker::PhantomData,
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum EncryptionError {
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] bincode::Error),
+    #[error("Encryption error: {0}")]
+    EncryptionError(#[from] aes_gcm::Error),
+    #[error("Invalid key length: {0}")]
+    InvalidKeyLength(#[from] InvalidLength),
 }
