@@ -1,4 +1,4 @@
-use std::{env, net::SocketAddr};
+use std::{env, net::SocketAddr, sync::Arc};
 
 use axum::{
     http::{
@@ -8,8 +8,11 @@ use axum::{
     response::IntoResponse,
     Json, Router,
 };
+use database::{get_database_pool, load_master_key};
 use dotenv::dotenv;
 use http::response::HttpResponse;
+use routers::users::get_router as get_users_router;
+use state::application::ApplicationState;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
 use tokio::{net::TcpListener, signal::ctrl_c};
@@ -21,6 +24,7 @@ use tower_http::cors::{Any, CorsLayer};
 static GLOBAL: Jemalloc = Jemalloc;
 
 pub mod http;
+mod routers;
 mod state;
 
 fn main() -> anyhow::Result<()> {
@@ -54,9 +58,39 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn async_main(threads: usize) {
-    // initialize routers
+    let min: Option<u32> = std::env::var("MIN_CONNECTIONS")
+        .unwrap_or(threads.to_string())
+        .parse::<u32>()
+        .map(|num| Some(num))
+        .map_err(|_| None::<u32>)
+        .unwrap();
 
-    let api = Router::new().fallback(deal_with_it);
+    let max: Option<u32> = std::env::var("MAX_CONNECTIONS")
+        .unwrap_or((threads * 2).to_string())
+        .parse::<u32>()
+        .map(|num| Some(num))
+        .map_err(|_| None::<u32>)
+        .unwrap();
+
+    let db_pool = get_database_pool(min, max).await;
+    let master_key: Vec<u8> = load_master_key().expect("Failed to load master key");
+    let app_state = Arc::new(ApplicationState::new(db_pool, master_key));
+
+    let user_router = get_users_router();
+
+    let protected_routers = Router::new().merge(user_router);
+
+    let unprotected_routers = Router::new();
+
+    let api_base = Router::new()
+        .merge(protected_routers)
+        .merge(unprotected_routers)
+        .with_state(app_state.clone());
+
+    // initialize routers
+    let api = Router::new()
+        .nest("/api/v1", api_base)
+        .fallback(deal_with_it);
 
     let handle = tokio::spawn(address_serve(api, threads));
 

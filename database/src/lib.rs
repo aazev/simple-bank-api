@@ -1,15 +1,17 @@
+pub mod filters;
 pub mod models;
+pub mod repositories;
 pub mod structs;
 pub mod traits;
 
+use aes_gcm::{aead::Aead, Aes256Gcm, Error as AesError, Nonce};
 use argon2::{password_hash::SaltString, Argon2, PasswordHasher, PasswordVerifier};
+use base64::{engine::general_purpose, Engine};
 use cipher::{InvalidLength, KeyInit};
 use dotenv::dotenv;
 use rand::{rngs::OsRng, RngCore};
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use thiserror::Error;
-
-use aes_gcm::{aead::Aead, Aes256Gcm, Error as AesError, Nonce};
 
 pub async fn get_database_pool(min: Option<u32>, max: Option<u32>) -> PgPool {
     dotenv().ok();
@@ -44,7 +46,10 @@ pub enum KeyManagementError {
     InvalidKeyLength(#[from] InvalidLength),
 }
 
-pub fn encrypt_user_key(user_key: &[u8], master_key: &[u8]) -> Result<Vec<u8>, KeyManagementError> {
+pub fn encrypt_user_key(
+    user_key: &[u8],
+    master_key: &[u8],
+) -> anyhow::Result<Vec<u8>, KeyManagementError> {
     let cipher = Aes256Gcm::new_from_slice(master_key)?;
 
     let mut nonce_bytes = [0u8; 12];
@@ -58,7 +63,7 @@ pub fn encrypt_user_key(user_key: &[u8], master_key: &[u8]) -> Result<Vec<u8>, K
 pub fn decrypt_user_key(
     encrypted_user_key: &[u8],
     master_key: &[u8],
-) -> Result<Vec<u8>, KeyManagementError> {
+) -> anyhow::Result<Vec<u8>, KeyManagementError> {
     let cipher = Aes256Gcm::new_from_slice(master_key)?;
 
     if encrypted_user_key.len() < 12 {
@@ -80,19 +85,30 @@ pub fn generate_random_key() -> [u8; 32] {
     key
 }
 
-pub fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
+pub fn hash_password(password: &str) -> anyhow::Result<String> {
     let salt = SaltString::generate(&mut OsRng);
 
-    Argon2::default()
-        .hash_password(password.as_bytes(), &salt)
-        .map(|hash| hash.to_string())
+    Ok(Argon2::default()
+        .hash_password(password.as_bytes(), &salt)?
+        .to_string())
 }
 
-pub fn verify_password(hash: &str, password: &str) -> Result<bool, argon2::password_hash::Error> {
+pub fn verify_password(hash: &str, password: &str) -> anyhow::Result<bool> {
     match argon2::PasswordHash::new(hash) {
         Ok(parsed_hash) => Ok(Argon2::default()
             .verify_password(password.as_bytes(), &parsed_hash)
             .is_ok()),
         Err(_) => Ok(false),
     }
+}
+
+pub fn load_master_key() -> anyhow::Result<Vec<u8>> {
+    // Implement your master key loading logic here
+    // For example, load from environment variable
+    let key_base64 = std::env::var("MASTER_KEY")?;
+    let key = general_purpose::STANDARD.decode(&key_base64)?;
+    if key.len() != 32 {
+        return Err(KeyManagementError::InvalidKeyLength(InvalidLength).into());
+    }
+    Ok(key)
 }

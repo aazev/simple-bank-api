@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-argon2 = { workspace = true }
-anyhow = { workspace = true }
+base64 = { workspace = true }
 aes-gcm = { workspace = true }
+anyhow = { workspace = true }
+argon2 = { workspace = true }
+async-trait = { workspace = true }
 bincode = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -16,5 +18,6 @@ num_cpus = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
+struct_iterable = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }

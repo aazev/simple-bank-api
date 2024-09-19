@@ -9,7 +9,7 @@ use super::user_dto::User;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Account {
     pub account_id: Uuid,
-    pub user_id: Uuid, // Owner of the account
+    pub id: Uuid, // Owner of the account
     pub balance: EncryptedField<f64>,
     pub created_at: NaiveDateTime,
 }
@@ -18,7 +18,7 @@ impl Account {
     pub fn new(user: &User, balance: f64) -> Result<Self, anyhow::Error> {
         Ok(Self {
             account_id: Uuid::now_v7(),
-            user_id: user.user_id,
+            id: user.id,
             balance: balance.encrypt(&user.encryption_key)?,
             created_at: chrono::Utc::now().naive_utc(),
         })
