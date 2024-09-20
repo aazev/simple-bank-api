@@ -23,7 +23,7 @@ impl Transaction {
         user_key: &[u8],
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let master_key = load_master_key()?;
-        let key = decrypt_user_key(&user_key, &master_key)?;
+        let key = decrypt_user_key(user_key, &master_key)?;
         Ok(Transaction {
             transaction_id: Uuid::new_v4(),
             from_account_id,
@@ -35,7 +35,7 @@ impl Transaction {
 
     pub fn get_amount(&self, user_key: &[u8]) -> Result<f64, Box<dyn std::error::Error>> {
         let master_key = load_master_key()?;
-        let key = decrypt_user_key(&user_key, &master_key)?;
+        let key = decrypt_user_key(user_key, &master_key)?;
         Ok(f64::decrypt(&self.amount, &key)?)
     }
 }
