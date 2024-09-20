@@ -1,4 +1,7 @@
-use crate::{structs::encrypted_field::EncryptedField, traits::encryptable::Encryptable};
+use crate::{
+    decrypt_user_key, load_master_key, structs::encrypted_field::EncryptedField,
+    traits::encryptable::Encryptable,
+};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -19,17 +22,21 @@ impl Transaction {
         amount: f64,
         user_key: &[u8],
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user_key, &master_key)?;
         Ok(Transaction {
             transaction_id: Uuid::new_v4(),
             from_account_id,
             to_account_id,
-            amount: amount.encrypt(user_key)?,
+            amount: amount.encrypt(&key)?,
             timestamp: chrono::Utc::now().naive_utc(),
         })
     }
 
     pub fn get_amount(&self, user_key: &[u8]) -> Result<f64, Box<dyn std::error::Error>> {
-        Ok(f64::decrypt(&self.amount, user_key)?)
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user_key, &master_key)?;
+        Ok(f64::decrypt(&self.amount, &key)?)
     }
 }
 

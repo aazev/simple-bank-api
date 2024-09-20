@@ -103,6 +103,7 @@ pub fn verify_password(hash: &str, password: &str) -> anyhow::Result<bool> {
 }
 
 pub fn load_master_key() -> anyhow::Result<Vec<u8>> {
+    dotenv().ok();
     // Implement your master key loading logic here
     // For example, load from environment variable
     let key_base64 = std::env::var("MASTER_KEY")?;

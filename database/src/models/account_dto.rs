@@ -2,7 +2,10 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{structs::encrypted_field::EncryptedField, traits::encryptable::Encryptable};
+use crate::{
+    decrypt_user_key, load_master_key, structs::encrypted_field::EncryptedField,
+    traits::encryptable::Encryptable,
+};
 
 use super::user_dto::User;
 
@@ -16,16 +19,20 @@ pub struct Account {
 
 impl Account {
     pub fn new(user: &User, balance: f64) -> Result<Self, anyhow::Error> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(Self {
             account_id: Uuid::now_v7(),
             id: user.id,
-            balance: balance.encrypt(&user.encryption_key)?,
+            balance: balance.encrypt(&key)?,
             created_at: chrono::Utc::now().naive_utc(),
         })
     }
 
     pub fn get_balance(&self, user: &User) -> Result<f64, anyhow::Error> {
-        Ok(f64::decrypt(&self.balance, &user.encryption_key)?)
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user.encryption_key, &master_key)?;
+        Ok(f64::decrypt(&self.balance, &key)?)
     }
 }
 
