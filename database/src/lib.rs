@@ -67,12 +67,12 @@ pub fn decrypt_user_key(
     let cipher = Aes256Gcm::new_from_slice(master_key)?;
 
     if encrypted_user_key.len() < 12 {
-        return Err(KeyManagementError::EncryptionError(aes_gcm::Error.into()));
+        return Err(KeyManagementError::EncryptionError(aes_gcm::Error));
     }
 
     let (nonce_bytes, ciphertext) = encrypted_user_key.split_at(12);
 
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::from_slice(nonce_bytes);
 
     let decrypted_user_key = cipher.decrypt(nonce, ciphertext)?;
 

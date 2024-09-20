@@ -61,14 +61,14 @@ async fn async_main(threads: usize) {
     let min: Option<u32> = std::env::var("MIN_CONNECTIONS")
         .unwrap_or(threads.to_string())
         .parse::<u32>()
-        .map(|num| Some(num))
+        .map(Some)
         .map_err(|_| None::<u32>)
         .unwrap();
 
     let max: Option<u32> = std::env::var("MAX_CONNECTIONS")
         .unwrap_or((threads * 2).to_string())
         .parse::<u32>()
-        .map(|num| Some(num))
+        .map(Some)
         .map_err(|_| None::<u32>)
         .unwrap();
 

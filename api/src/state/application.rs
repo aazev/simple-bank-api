@@ -1,5 +1,6 @@
 use sqlx::PgPool;
 
+#[allow(dead_code)]
 pub struct ApplicationState {
     pub db_pool: PgPool,
     pub master_key: Vec<u8>,
