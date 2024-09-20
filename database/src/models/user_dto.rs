@@ -7,13 +7,15 @@ use uuid::Uuid;
 
 use crate::{encrypt_user_key, generate_random_key, load_master_key};
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Default)]
+#[derive(Debug, Serialize, Deserialize, FromRow, Default, Clone)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
     pub email: String,
     pub active: bool,
+    #[serde(skip_serializing)]
     pub password: String,
+    #[serde(skip_serializing)]
     pub encryption_key: Vec<u8>, // User-specific encryption key
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
@@ -53,9 +55,7 @@ impl User {
 pub struct UserCreate {
     pub name: String,
     pub email: String,
-    #[serde(skip_deserializing)]
     pub active: Option<bool>,
-    #[serde(skip_deserializing)]
     pub password: Option<String>,
 }
 

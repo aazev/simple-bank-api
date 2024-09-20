@@ -43,7 +43,13 @@ mod tests {
     fn test_transaction_creation_and_amount() {
         let from_account_id = Uuid::new_v4();
         let to_account_id = Uuid::new_v4();
-        let user = User::new("test".to_string(), "test".to_string(), [0u8; 32].to_vec());
+        let user = User::new(
+            "test".to_string(),
+            "test".to_string(),
+            Some(true),
+            Some("test".to_string()),
+        )
+        .expect("User creation failed");
         let amount = 250.0;
 
         let transaction =
@@ -61,8 +67,20 @@ mod tests {
     fn test_transaction_amount_with_wrong_key_fails() {
         let from_account_id = Uuid::new_v4();
         let to_account_id = Uuid::new_v4();
-        let user = User::new("test".to_string(), "test".to_string(), [0u8; 32].to_vec());
-        let wrong_user = User::new("test".to_string(), "test".to_string(), [1u8; 32].to_vec());
+        let user = User::new(
+            "test".to_string(),
+            "test".to_string(),
+            Some(true),
+            Some("test".to_string()),
+        )
+        .expect("User creation failed");
+        let wrong_user = User::new(
+            "test".to_string(),
+            "test".to_string(),
+            Some(true),
+            Some("test".to_string()),
+        )
+        .expect("User creation failed");
         let amount = 250.0;
 
         let transaction =

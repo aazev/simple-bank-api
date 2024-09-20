@@ -9,6 +9,9 @@ axum = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dotenv = { workspace = true }
+hmac = { workspace = true }
+jwt = { workspace = true }
+sha2 = { workspace = true }
 num_cpus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

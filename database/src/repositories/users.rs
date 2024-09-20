@@ -15,13 +15,12 @@ impl UserRepository {
         Self { db_pool }
     }
 }
+
 #[async_trait]
 impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
     async fn find_all(&self, filters: &UserFilter) -> anyhow::Result<Vec<User>> {
         let args = filters.get_arguments();
         let query = r#"SELECT * FROM users "#.to_owned() + &filters.query();
-
-        dbg!(&query);
 
         let users = sqlx::query_as_with::<_, User, _>(&query, args)
             .fetch_all(&self.db_pool)
@@ -45,15 +44,29 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(user)
     }
 
+    async fn find_one_by_filter(&self, filters: &UserFilter) -> anyhow::Result<User> {
+        let args = filters.get_arguments();
+        let query = r#"SELECT * FROM users "#.to_owned() + &filters.query();
+
+        let user = sqlx::query_as_with::<_, User, _>(&query, args)
+            .fetch_one(&self.db_pool)
+            .await?;
+
+        Ok(user)
+    }
+
     async fn create(&self, entity: &UserCreate) -> anyhow::Result<User> {
+        dbg!(&entity);
         let new_user = User::try_from(entity)?;
+        dbg!(&new_user);
         let user = sqlx::query_as!(
             User,
             r#"
-            INSERT INTO users (name, email, password, encryption_key)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO users (id, name, email, password, encryption_key)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING *
             "#,
+            new_user.id,
             new_user.name,
             new_user.email,
             new_user.password,

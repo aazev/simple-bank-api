@@ -5,13 +5,15 @@ use axum::{
         header::{ACCEPT, ACCESS_CONTROL_ALLOW_ORIGIN, AUTHORIZATION, CONTENT_TYPE, REFERER},
         HeaderName, HeaderValue, Method, StatusCode,
     },
+    middleware as axum_middleware,
     response::IntoResponse,
     Json, Router,
 };
 use database::{get_database_pool, load_master_key};
 use dotenv::dotenv;
 use http::response::HttpResponse;
-use routers::users::get_router as get_users_router;
+use middlewares::auth::auth;
+use routers::{auth::get_router as get_auth_router, users::get_router as get_users_router};
 use state::application::ApplicationState;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -24,6 +26,7 @@ use tower_http::cors::{Any, CorsLayer};
 static GLOBAL: Jemalloc = Jemalloc;
 
 pub mod http;
+mod middlewares;
 mod routers;
 mod state;
 
@@ -74,13 +77,19 @@ async fn async_main(threads: usize) {
 
     let db_pool = get_database_pool(min, max).await;
     let master_key: Vec<u8> = load_master_key().expect("Failed to load master key");
-    let app_state = Arc::new(ApplicationState::new(db_pool, master_key));
+    let jwt_key = std::env::var("JWT_KEY")
+        .unwrap_or("eaccbdc5-dd87-40dc-a998-6a6fa26a5fa5.simple_bank_api".to_string());
+
+    let app_state = Arc::new(ApplicationState::new(db_pool, master_key, jwt_key));
 
     let user_router = get_users_router();
+    let auth_router = get_auth_router();
 
-    let protected_routers = Router::new().merge(user_router);
+    let protected_routers = Router::new()
+        .merge(user_router)
+        .layer(axum_middleware::from_fn_with_state(app_state.clone(), auth));
 
-    let unprotected_routers = Router::new();
+    let unprotected_routers = Router::new().merge(auth_router);
 
     let api_base = Router::new()
         .merge(protected_routers)

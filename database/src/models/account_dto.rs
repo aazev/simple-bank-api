@@ -35,7 +35,13 @@ mod tests {
 
     #[test]
     fn test_account_creation_and_balance() {
-        let user = User::new("test".to_string(), "test".to_string(), [0u8; 32].to_vec());
+        let user = User::new(
+            "test".to_string(),
+            "test".to_string(),
+            Some(true),
+            Some("test".to_string()),
+        )
+        .expect("User creation failed");
         let initial_balance = 1000.0;
 
         let account = Account::new(&user, initial_balance).expect("Account creation failed");
@@ -47,8 +53,20 @@ mod tests {
 
     #[test]
     fn test_account_balance_with_wrong_key_fails() {
-        let user = User::new("test".to_string(), "test".to_string(), [0u8; 32].to_vec());
-        let wrong_user = User::new("wrong".to_string(), "wrong".to_string(), [1u8; 32].to_vec());
+        let user = User::new(
+            "test".to_string(),
+            "test".to_string(),
+            Some(true),
+            Some("test".to_string()),
+        )
+        .expect("User creation failed");
+        let wrong_user = User::new(
+            "wrong".to_string(),
+            "wrong".to_string(),
+            Some(true),
+            Some("wrong".to_string()),
+        )
+        .expect("User creation failed");
         let initial_balance = 1000.0;
 
         let account = Account::new(&user, initial_balance).expect("Account creation failed");
