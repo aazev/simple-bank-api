@@ -18,6 +18,8 @@ jobs:
         rust: [stable]
 
     runs-on: ${{ matrix.os }}
+    env:
+      MASTER_KEY: ${{ secrets.MASTER_KEY }}
 
     steps:
       - name: Checkout code
