@@ -13,7 +13,10 @@ use database::{get_database_pool, load_master_key};
 use dotenv::dotenv;
 use http::response::HttpResponse;
 use middlewares::auth::auth;
-use routers::{auth::get_router as get_auth_router, users::get_router as get_users_router};
+use routers::{
+    accounts::get_router as get_accounts_router, auth::get_router as get_auth_router,
+    transactions::get_router as get_transactions_router, users::get_router as get_users_router,
+};
 use state::application::ApplicationState;
 #[cfg(not(target_env = "msvc"))]
 use tikv_jemallocator::Jemalloc;
@@ -83,10 +86,14 @@ async fn async_main(threads: usize) {
     let app_state = Arc::new(ApplicationState::new(db_pool, master_key, jwt_key));
 
     let user_router = get_users_router();
+    let accounts_router = get_accounts_router();
+    let transactions_router = get_transactions_router();
     let auth_router = get_auth_router();
 
     let protected_routers = Router::new()
         .merge(user_router)
+        .merge(accounts_router)
+        .merge(transactions_router)
         .layer(axum_middleware::from_fn_with_state(app_state.clone(), auth));
 
     let unprotected_routers = Router::new().merge(auth_router);

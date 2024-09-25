@@ -17,6 +17,7 @@ dotenv = { workspace = true }
 num_cpus = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true }
 struct_iterable = { workspace = true }
 thiserror = { workspace = true }

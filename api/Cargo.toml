@@ -9,12 +9,13 @@ axum = { workspace = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 dotenv = { workspace = true }
+futures = { workspace = true }
 hmac = { workspace = true }
 jwt = { workspace = true }
-sha2 = { workspace = true }
 num_cpus = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true }
 struct_iterable = { workspace = true }
 tokio = { workspace = true }

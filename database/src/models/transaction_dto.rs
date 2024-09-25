@@ -4,12 +4,26 @@ use crate::{
 };
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::{FromRow, Type};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone, Type)]
+#[sqlx(type_name = "transaction_type", rename_all = "lowercase")]
+pub enum TransactionType {
+    Deposit,
+    Withdrawal,
+    Transfer,
+    Payment,
+    Fee,
+    Interest,
+}
+
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Transaction {
-    pub transaction_id: Uuid,
-    pub from_account_id: Uuid,
+    pub id: Uuid,
+    #[serde(rename = "type")]
+    pub _type: TransactionType,
+    pub from_account_id: Option<Uuid>,
     pub to_account_id: Uuid,
     pub amount: EncryptedField<f64>,
     pub timestamp: NaiveDateTime,
@@ -17,15 +31,17 @@ pub struct Transaction {
 
 impl Transaction {
     pub fn new(
-        from_account_id: Uuid,
+        from_account_id: Option<Uuid>,
         to_account_id: Uuid,
+        transaction_type: TransactionType,
         amount: f64,
         user_key: &[u8],
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(user_key, &master_key)?;
         Ok(Transaction {
-            transaction_id: Uuid::new_v4(),
+            id: Uuid::new_v4(),
+            _type: transaction_type,
             from_account_id,
             to_account_id,
             amount: amount.encrypt(&key)?,
@@ -37,6 +53,59 @@ impl Transaction {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(user_key, &master_key)?;
         Ok(f64::decrypt(&self.amount, &key)?)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransactionCreate {
+    #[serde(rename = "type")]
+    pub _type: TransactionType,
+    pub from_account_id: Option<Uuid>,
+    pub to_account_id: Uuid,
+    pub amount: f64,
+}
+
+impl TransactionCreate {
+    pub fn to_transaction(&self, user_key: &[u8]) -> anyhow::Result<Transaction> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(user_key, &master_key)?;
+        Ok(Transaction {
+            id: Uuid::new_v4(),
+            _type: self._type.clone(),
+            from_account_id: self.from_account_id,
+            to_account_id: self.to_account_id,
+            amount: self.amount.encrypt(&key)?,
+            timestamp: chrono::Utc::now().naive_utc(),
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct TransactionModel {
+    pub id: Uuid,
+    #[serde(rename = "type")]
+    pub _type: TransactionType,
+    pub from_account_id: Option<Uuid>,
+    pub to_account_id: Uuid,
+    pub amount: f64,
+    pub timestamp: NaiveDateTime,
+}
+
+impl TransactionModel {
+    pub fn from_dto(
+        transaction: &Transaction,
+        user_key: &[u8],
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let master = load_master_key()?;
+        let key = decrypt_user_key(user_key, &master)?;
+        Ok(TransactionModel {
+            id: transaction.id,
+            _type: transaction._type.clone(),
+            from_account_id: transaction.from_account_id,
+            to_account_id: transaction.to_account_id,
+            amount: f64::decrypt(&transaction.amount, &key)?,
+            timestamp: transaction.timestamp,
+        })
     }
 }
 
@@ -59,9 +128,14 @@ mod tests {
         .expect("User creation failed");
         let amount = 250.0;
 
-        let transaction =
-            Transaction::new(from_account_id, to_account_id, amount, &user.encryption_key)
-                .expect("Transaction creation failed");
+        let transaction = Transaction::new(
+            Some(from_account_id),
+            to_account_id,
+            TransactionType::Deposit,
+            amount,
+            &user.encryption_key,
+        )
+        .expect("Transaction creation failed");
 
         let decrypted_amount = transaction
             .get_amount(&user.encryption_key)
@@ -90,9 +164,14 @@ mod tests {
         .expect("User creation failed");
         let amount = 250.0;
 
-        let transaction =
-            Transaction::new(from_account_id, to_account_id, amount, &user.encryption_key)
-                .expect("Transaction creation failed");
+        let transaction = Transaction::new(
+            Some(from_account_id),
+            to_account_id,
+            TransactionType::Deposit,
+            amount,
+            &user.encryption_key,
+        )
+        .expect("Transaction creation failed");
 
         let result = transaction.get_amount(&wrong_user.encryption_key);
 

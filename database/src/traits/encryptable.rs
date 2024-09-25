@@ -41,7 +41,7 @@ pub trait Encryptable {
         let decrypted_data = cipher.decrypt(nonce, encrypted_field.ciphertext.as_ref())?;
 
         // Deserialize the data
-        Ok(bincode::deserialize(&decrypted_data).unwrap())
+        Ok(bincode::deserialize(&decrypted_data)?)
     }
 }
 

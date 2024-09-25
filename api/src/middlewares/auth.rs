@@ -101,21 +101,11 @@ pub async fn auth(
 
     let user_repository = UserRepository::new(state.db_pool.clone());
     match user_repository.find_by_id(&payload.user_id).await {
-        Ok(user) => match user {
-            Some(user) => {
-                req.extensions_mut().insert(user);
-                req.extensions_mut().insert(payload.scopes);
-                Ok(next.run(req).await)
-            }
-            None => Err((
-                StatusCode::UNAUTHORIZED,
-                Json(HttpResponse {
-                    status: StatusCode::UNAUTHORIZED.as_u16(),
-                    message: "Unauthorized".to_string(),
-                    fields: None,
-                }),
-            )),
-        },
+        Ok(user) => {
+            req.extensions_mut().insert(user);
+            req.extensions_mut().insert(payload.scopes);
+            Ok(next.run(req).await)
+        }
         Err(_) => Err((
             StatusCode::UNAUTHORIZED,
             Json(HttpResponse {

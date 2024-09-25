@@ -1,6 +1,10 @@
 #[macro_export]
 macro_rules! impl_filterable {
-    ($struct_name:ident, $( $field:ident ),* ) => {
+    (
+        $struct_name:ident,
+        exact = [$($exact_field:ident),*],
+        range = [$($range_field:ident),*]
+    ) => {
         use sqlx::{postgres::PgArguments, Arguments};
 
         impl $struct_name {
@@ -8,8 +12,20 @@ macro_rules! impl_filterable {
                 let mut conditions = Vec::new();
 
                 $(
-                    if self.$field.is_some() {
-                        conditions.push(format!("{} = ${}", stringify!($field), conditions.len() + 1));
+                    if self.$exact_field.is_some() {
+                        conditions.push(format!("{} = ${}", stringify!($exact_field), conditions.len() + 1));
+                    }
+                )*
+
+                $(
+                    if let Some(ref range) = self.$range_field {
+                        if range.start.is_some() {
+                            conditions.push(format!("{} >= ${}", stringify!($range_field), conditions.len() + 1));
+                        }
+
+                        if range.end.is_some() {
+                            conditions.push(format!("{} <= ${}", stringify!($range_field), conditions.len() + 1));
+                        }
                     }
                 )*
 
@@ -39,8 +55,20 @@ macro_rules! impl_filterable {
                 let mut conditions = Vec::new();
 
                 $(
-                    if self.$field.is_some() {
-                        conditions.push(format!("{} = ${}", stringify!($field), conditions.len() + 1));
+                    if self.$exact_field.is_some() {
+                            conditions.push(format!("{} = ${}", stringify!($exact_field), conditions.len() + 1));
+                    }
+                )*
+
+                $(
+                    if let Some(ref range) = self.$range_field {
+                        if range.start.is_some() {
+                            conditions.push(format!("{} >= ${}", stringify!($range_field), conditions.len() + 1));
+                        }
+
+                        if range.end.is_some() {
+                            conditions.push(format!("{} <= ${}", stringify!($range_field), conditions.len() + 1));
+                        }
                     }
                 )*
 
@@ -60,8 +88,20 @@ macro_rules! impl_filterable {
                 let mut args = PgArguments::default();
 
                 $(
-                    if let Some(ref value) = self.$field {
+                    if let Some(ref value) = self.$exact_field {
                         args.add(value);
+                    }
+                )*
+
+                $(
+                    if let Some(ref range) = self.$range_field {
+                        if let Some(ref start) = range.start {
+                            args.add(start);
+                        }
+
+                        if let Some(ref end) = range.end {
+                            args.add(end);
+                        }
                     }
                 )*
 

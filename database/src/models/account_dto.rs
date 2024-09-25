@@ -1,5 +1,6 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
 use uuid::Uuid;
 
 use crate::{
@@ -9,12 +10,13 @@ use crate::{
 
 use super::user_dto::User;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Account {
-    pub account_id: Uuid,
-    pub id: Uuid, // Owner of the account
+    pub id: Uuid,
+    pub user_id: Uuid, // Owner of the account
     pub balance: EncryptedField<f64>,
     pub created_at: NaiveDateTime,
+    pub updated_at: Option<NaiveDateTime>,
 }
 
 impl Account {
@@ -22,10 +24,11 @@ impl Account {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(Self {
-            account_id: Uuid::now_v7(),
-            id: user.id,
+            id: Uuid::now_v7(),
+            user_id: user.id,
             balance: balance.encrypt(&key)?,
             created_at: chrono::Utc::now().naive_utc(),
+            updated_at: None,
         })
     }
 
@@ -33,6 +36,49 @@ impl Account {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(f64::decrypt(&self.balance, &key)?)
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AccountCreate {
+    pub user_id: Uuid,
+    pub balance: f64,
+}
+
+impl AccountCreate {
+    pub fn to_account(&self, user: &User) -> Result<Account, anyhow::Error> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user.encryption_key, &master_key)?;
+        Ok(Account {
+            id: Uuid::now_v7(),
+            user_id: self.user_id,
+            balance: self.balance.encrypt(&key)?,
+            created_at: chrono::Utc::now().naive_utc(),
+            updated_at: None,
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct AccountModel {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub balance: f64,
+    pub created_at: NaiveDateTime,
+    pub updated_at: Option<NaiveDateTime>,
+}
+
+impl AccountModel {
+    pub fn from_dto(account: &Account, user: &User) -> Result<Self, anyhow::Error> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user.encryption_key, &master_key)?;
+        Ok(Self {
+            id: account.id,
+            user_id: account.user_id,
+            balance: f64::decrypt(&account.balance, &key)?,
+            created_at: account.created_at,
+            updated_at: account.updated_at,
+        })
     }
 }
 

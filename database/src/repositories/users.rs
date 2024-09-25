@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{models::user_dto::User, traits::repository::Repository};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UserRepository {
     db_pool: PgPool,
 }
@@ -29,7 +29,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(users)
     }
 
-    async fn find_by_id(&self, id: &Uuid) -> anyhow::Result<Option<User>> {
+    async fn find_by_id(&self, id: &Uuid) -> anyhow::Result<User> {
         let user = sqlx::query_as!(
             User,
             r#"
@@ -38,7 +38,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
             "#,
             id
         )
-        .fetch_optional(&self.db_pool)
+        .fetch_one(&self.db_pool)
         .await?;
 
         Ok(user)
@@ -56,9 +56,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
     }
 
     async fn create(&self, entity: &UserCreate) -> anyhow::Result<User> {
-        dbg!(&entity);
         let new_user = User::try_from(entity)?;
-        dbg!(&new_user);
         let user = sqlx::query_as!(
             User,
             r#"
