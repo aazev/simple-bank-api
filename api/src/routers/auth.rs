@@ -3,8 +3,7 @@ use std::sync::Arc;
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use chrono::{Duration, Local};
 use database::{
-    filters::user::Filter as UserFilter, repositories::users::UserRepository,
-    traits::repository::Repository, verify_password,
+    filters::user::Filter as UserFilter, services::user::Service as UserService, verify_password,
 };
 use hmac::Hmac;
 use jwt::SignWithKey;
@@ -32,14 +31,18 @@ pub async fn authorize_user(
         ..Default::default()
     };
 
-    let user_repository = UserRepository::new(state.db_pool.clone());
-    match user_repository.find_one_by_filter(&filter).await {
-        Ok(user) => match verify_password(&user.password, &payload.password) {
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+
+    match user_service.get_one_by_filter(&mut tx, &filter).await {
+        Some(user) => match verify_password(&user.password, &payload.password) {
             Ok(_) => {
                 let token_creation = Local::now().naive_utc();
                 let token_expiration = token_creation + Duration::hours(1);
                 let jwt_key: Hmac<Sha256> = Hmac::new_from_slice(state.jwt_key.as_bytes()).unwrap();
                 let token = JsonWebToken::new(user.id, payload.scopes, Some(token_expiration));
+
+                tx.rollback().await.unwrap();
 
                 match token.sign_with_key(&jwt_key) {
                     Ok(token) => {
@@ -56,22 +59,30 @@ pub async fn authorize_user(
                     )),
                 }
             }
-            Err(_) => Err((
-                StatusCode::FORBIDDEN,
+            Err(_) => {
+                tx.rollback().await.unwrap();
+
+                Err((
+                    StatusCode::FORBIDDEN,
+                    Json(HttpResponse {
+                        status: StatusCode::FORBIDDEN.as_u16(),
+                        message: "Invalid credentials".to_string(),
+                        fields: None,
+                    }),
+                ))
+            }
+        },
+        None => {
+            tx.rollback().await.unwrap();
+
+            Err((
+                StatusCode::UNAUTHORIZED,
                 Json(HttpResponse {
-                    status: StatusCode::FORBIDDEN.as_u16(),
-                    message: "Invalid credentials".to_string(),
+                    status: StatusCode::UNAUTHORIZED.as_u16(),
+                    message: "Unauthorized".to_string(),
                     fields: None,
                 }),
-            )),
-        },
-        Err(_) => Err((
-            StatusCode::UNAUTHORIZED,
-            Json(HttpResponse {
-                status: StatusCode::UNAUTHORIZED.as_u16(),
-                message: "Unauthorized".to_string(),
-                fields: None,
-            }),
-        )),
+            ))
+        }
     }
 }

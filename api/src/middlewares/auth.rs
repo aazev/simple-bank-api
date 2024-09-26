@@ -8,7 +8,7 @@ use axum::{
     Json,
 };
 use chrono::NaiveDateTime;
-use database::{repositories::users::UserRepository, traits::repository::Repository};
+use database::services::user::Service as UserService;
 use hmac::{digest::KeyInit, Hmac};
 use jwt::VerifyWithKey;
 use serde::{Deserialize, Serialize};
@@ -99,14 +99,15 @@ pub async fn auth(
         ));
     }
 
-    let user_repository = UserRepository::new(state.db_pool.clone());
-    match user_repository.find_by_id(&payload.user_id).await {
-        Ok(user) => {
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+    match user_service.get_one_by_id(&mut tx, &payload.user_id).await {
+        Some(user) => {
             req.extensions_mut().insert(user);
             req.extensions_mut().insert(payload.scopes);
             Ok(next.run(req).await)
         }
-        Err(_) => Err((
+        None => Err((
             StatusCode::UNAUTHORIZED,
             Json(HttpResponse {
                 status: StatusCode::UNAUTHORIZED.as_u16(),

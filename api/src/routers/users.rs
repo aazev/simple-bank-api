@@ -9,8 +9,7 @@ use axum::{
 use database::{
     filters::user::Filter as UserFilter,
     models::user_dto::{User, UserCreate},
-    repositories::users::UserRepository,
-    traits::repository::Repository,
+    services::user::Service as UserService,
 };
 use uuid::Uuid;
 
@@ -32,29 +31,21 @@ pub async fn get_users(
     State(state): State<Arc<ApplicationState>>,
     Query(mut filters): Query<UserFilter>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<HttpResponse>)> {
-    let repository = UserRepository::new(state.db_pool.clone());
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
 
     filters.enforce_pagination();
+    let (users, total) = user_service.get_all(&mut tx, &filters).await;
+    tx.rollback().await.unwrap();
 
-    match repository.find_all(&filters).await {
-        Ok(users) => {
-            let total = repository.get_total(&filters).await.unwrap();
-            match filters.offset {
-                Some(offset) => {
-                    let paginated = HttpPaginatedResponse::new(users, offset, filters.limit, total);
-                    Ok(Json(ReturnTypes::Paginated(paginated)))
-                }
-                None => Ok(Json(ReturnTypes::Multiple(users))),
-            }
-        }
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(HttpResponse::new(
-                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                err.to_string(),
-                None,
-            )),
-        )),
+    match filters.offset {
+        Some(offset) => Ok(Json(ReturnTypes::Paginated(HttpPaginatedResponse::new(
+            users,
+            offset,
+            filters.limit,
+            total,
+        )))),
+        None => Ok(Json(ReturnTypes::Multiple(users))),
     }
 }
 
@@ -62,10 +53,18 @@ pub async fn get_user(
     State(state): State<Arc<ApplicationState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<String>)> {
-    let repository = UserRepository::new(state.db_pool.clone());
-    match repository.find_by_id(&id).await {
-        Ok(user) => Ok(Json(ReturnTypes::Single(user))),
-        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string()))),
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+
+    match user_service.get_one_by_id(&mut tx, &id).await {
+        Some(user) => {
+            tx.rollback().await.unwrap();
+            Ok(Json(ReturnTypes::Single(user)))
+        }
+        None => {
+            tx.rollback().await.unwrap();
+            Err((StatusCode::NOT_FOUND, Json("User not found".to_string())))
+        }
     }
 }
 
@@ -73,10 +72,18 @@ pub async fn create_user(
     State(state): State<Arc<ApplicationState>>,
     Json(user): Json<UserCreate>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<String>)> {
-    let repository = UserRepository::new(state.db_pool.clone());
-    match repository.create(&user).await {
-        Ok(user) => Ok(Json(ReturnTypes::Single(user))),
-        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string()))),
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+
+    match user_service.create(&mut tx, &user).await {
+        Ok(user) => {
+            tx.commit().await.unwrap();
+            Ok(Json(ReturnTypes::Single(user)))
+        }
+        Err(err) => {
+            tx.rollback().await.unwrap();
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string())))
+        }
     }
 }
 
@@ -85,8 +92,10 @@ pub async fn update_user(
     Path(id): Path<Uuid>,
     Json(user): Json<UserCreate>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<String>)> {
-    let repository = UserRepository::new(state.db_pool.clone());
-    match repository.update(&id, &user).await {
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+
+    match user_service.update(&mut tx, &id, &user).await {
         Ok(user) => Ok(Json(ReturnTypes::Single(user))),
         Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string()))),
     }
@@ -96,16 +105,24 @@ pub async fn delete_user(
     State(state): State<Arc<ApplicationState>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<HttpResponse>, (StatusCode, Json<String>)> {
-    let repository = UserRepository::new(state.db_pool.clone());
-    match repository.delete(&id).await {
-        true => Ok(Json(HttpResponse::new(
-            StatusCode::OK.as_u16(),
-            "User deleted successfully".to_string(),
-            None,
-        ))),
-        false => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json("Internal Server Error".to_string()),
-        )),
+    let user_service = UserService::new();
+    let mut tx = state.db_pool.begin().await.unwrap();
+
+    match user_service.delete(&mut tx, &id).await {
+        true => {
+            tx.commit().await.unwrap();
+            Ok(Json(HttpResponse::new(
+                StatusCode::OK.as_u16(),
+                "User deleted successfully".to_string(),
+                None,
+            )))
+        }
+        false => {
+            tx.rollback().await.unwrap();
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json("Internal Server Error".to_string()),
+            ))
+        }
     }
 }

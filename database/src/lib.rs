@@ -1,6 +1,7 @@
 pub mod filters;
 pub mod models;
 pub mod repositories;
+pub mod services;
 pub mod structs;
 pub mod traits;
 
