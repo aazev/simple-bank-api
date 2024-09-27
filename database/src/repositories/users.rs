@@ -1,9 +1,8 @@
 use crate::{filters::user::Filter as UserFilter, models::user_dto::UserCreate};
-use async_trait::async_trait;
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
 
-use crate::{models::user_dto::User, traits::repository::Repository};
+use crate::models::user_dto::User;
 
 #[derive(Debug, Clone)]
 pub struct UserRepository;
@@ -11,17 +10,8 @@ impl UserRepository {
     pub fn new() -> Self {
         Self
     }
-}
 
-impl Default for UserRepository {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
-    async fn find_all(
+    pub async fn find_all(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &UserFilter,
@@ -36,7 +26,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(users)
     }
 
-    async fn find_by_id(
+    pub async fn find_by_id(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         id: &Uuid,
@@ -55,7 +45,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(user)
     }
 
-    async fn find_one_by_filter(
+    pub async fn find_one_by_filter(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &UserFilter,
@@ -70,7 +60,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(user)
     }
 
-    async fn create(
+    pub async fn create(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         entity: &UserCreate,
@@ -95,7 +85,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(user)
     }
 
-    async fn update(
+    pub async fn update(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         id: &Uuid,
@@ -119,7 +109,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         Ok(user)
     }
 
-    async fn delete(&self, executor: &mut Transaction<'_, Postgres>, id: &Uuid) -> bool {
+    pub async fn delete(&self, executor: &mut Transaction<'_, Postgres>, id: &Uuid) -> bool {
         sqlx::query!(
             r#"
             DELETE FROM users
@@ -132,7 +122,7 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
         .is_ok()
     }
 
-    async fn get_total(
+    pub async fn get_total(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &UserFilter,
@@ -144,5 +134,11 @@ impl Repository<Uuid, User, UserCreate, UserFilter> for UserRepository {
             .await?;
 
         Ok(result.get::<i64, &str>("total") as u64)
+    }
+}
+
+impl Default for UserRepository {
+    fn default() -> Self {
+        Self::new()
     }
 }

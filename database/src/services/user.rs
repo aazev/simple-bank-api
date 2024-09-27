@@ -5,7 +5,6 @@ use crate::{
     filters::user::Filter as UserFilter,
     models::user_dto::{User, UserCreate},
     repositories::users::UserRepository,
-    traits::repository::Repository,
 };
 
 #[derive(Debug)]

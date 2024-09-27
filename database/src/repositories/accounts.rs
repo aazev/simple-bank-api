@@ -1,14 +1,12 @@
 use crate::{
     filters::account::Filter as AccountFilter,
-    models::account_dto::{Account, AccountCreate},
+    models::{
+        account_dto::{Account, AccountCreate},
+        user_dto::User,
+    },
 };
-use async_trait::async_trait;
 use sqlx::{Postgres, Row, Transaction};
 use uuid::Uuid;
-
-use crate::traits::repository::Repository;
-
-use super::users::UserRepository;
 
 #[derive(Debug, Clone)]
 pub struct AccountRepository;
@@ -16,11 +14,8 @@ impl AccountRepository {
     pub fn new() -> Self {
         Self
     }
-}
 
-#[async_trait]
-impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountRepository {
-    async fn find_all(
+    pub async fn find_all(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &AccountFilter,
@@ -29,13 +24,13 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
         let query = r#"SELECT * FROM accounts "#.to_owned() + &filters.query();
 
         let accounts = sqlx::query_as_with::<_, Account, _>(&query, args)
-            .fetch_all(*executor)
+            .fetch_all(&mut **executor)
             .await?;
 
         Ok(accounts)
     }
 
-    async fn find_one_by_filter(
+    pub async fn find_one_by_filter(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &AccountFilter,
@@ -44,7 +39,7 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
         let query = r#"SELECT * FROM accounts "#.to_owned() + &filters.query();
 
         let account = sqlx::query_as_with::<_, Account, _>(&query, args)
-            .fetch_optional(*executor)
+            .fetch_optional(&mut **executor)
             .await?;
 
         if account.is_none() {
@@ -54,7 +49,7 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
         Ok(account.unwrap())
     }
 
-    async fn find_by_id(
+    pub async fn find_by_id(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         id: &Uuid,
@@ -66,22 +61,19 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
             "#,
         )
         .bind(id)
-        .fetch_one(*executor)
+        .fetch_one(&mut **executor)
         .await?;
 
         Ok(account)
     }
 
-    async fn create(
+    pub async fn create(
         &self,
         executor: &mut Transaction<'_, Postgres>,
+        user: &User,
         account: &AccountCreate,
     ) -> anyhow::Result<Account> {
-        let user_repository = UserRepository::new(self.db_pool.clone());
-        let mut tx = self.db_pool.begin().await?;
-        let user = user_repository.find_by_id(&account.user_id).await?;
-
-        let account = account.to_account(&user)?;
+        let account = account.to_account(user)?;
 
         sqlx::query(
             r#"
@@ -92,15 +84,13 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
         .bind(&account.id)
         .bind(&account.user_id)
         .bind(&account.balance)
-        .execute(&mut *tx)
+        .execute(&mut **executor)
         .await?;
-
-        tx.commit().await?;
 
         Ok(account)
     }
 
-    async fn update(
+    pub async fn update(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         id: &Uuid,
@@ -117,13 +107,13 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
         .bind(id)
         .bind(&account.user_id)
         .bind(&account.balance)
-        .fetch_one(*executor)
+        .fetch_one(&mut **executor)
         .await?;
 
         Ok(account)
     }
 
-    async fn delete(&self, executor: &mut Transaction<'_, Postgres>, id: &Uuid) -> bool {
+    pub async fn delete(&self, executor: &mut Transaction<'_, Postgres>, id: &Uuid) -> bool {
         sqlx::query!(
             r#"
             DELETE FROM accounts
@@ -131,19 +121,21 @@ impl Repository<Uuid, Account, AccountCreate, AccountFilter> for AccountReposito
             "#,
             id
         )
-        .execute(*executor)
+        .execute(&mut **executor)
         .await
         .is_ok()
     }
 
-    async fn get_total(
+    pub async fn get_total(
         &self,
         executor: &mut Transaction<'_, Postgres>,
         filters: &AccountFilter,
     ) -> anyhow::Result<u64> {
         let args = filters.get_arguments();
         let query = r#"SELECT COUNT(*) as total FROM accounts "#.to_owned() + &filters.total();
-        let result = sqlx::query_with(&query, args).fetch_one(*executor).await?;
+        let result = sqlx::query_with(&query, args)
+            .fetch_one(&mut **executor)
+            .await?;
 
         Ok(result.get::<i64, &str>("total") as u64)
     }
