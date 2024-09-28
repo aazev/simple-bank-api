@@ -6,6 +6,13 @@ use crate::models::user_dto::User;
 
 #[derive(Debug, Clone)]
 pub struct UserRepository;
+
+impl Default for UserRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl UserRepository {
     pub fn new() -> Self {
         Self
@@ -134,11 +141,5 @@ impl UserRepository {
             .await?;
 
         Ok(result.get::<i64, &str>("total") as u64)
-    }
-}
-
-impl Default for UserRepository {
-    fn default() -> Self {
-        Self::new()
     }
 }

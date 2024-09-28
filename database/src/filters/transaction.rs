@@ -20,5 +20,6 @@ pub struct Filter {
 impl_filterable!(
     Filter,
     exact = [id, from_account_id, to_account_id],
-    range = [created_at]
+    range = [created_at],
+    order_by = [(created_at, desc), (id, desc)]
 );

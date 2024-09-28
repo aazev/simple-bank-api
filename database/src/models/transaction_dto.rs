@@ -8,32 +8,32 @@ use sqlx::prelude::{FromRow, Type};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Type)]
-#[sqlx(type_name = "transaction_type", rename_all = "lowercase")]
-pub enum TransactionType {
+#[sqlx(type_name = "transaction_operation", rename_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+pub enum TransactionOperation {
     Deposit,
-    Withdrawal,
-    Transfer,
-    Payment,
     Fee,
     Interest,
+    Payment,
+    Transfer,
+    Withdrawal,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Transaction {
     pub id: Uuid,
-    #[serde(rename = "type")]
-    pub _type: TransactionType,
+    pub operation: TransactionOperation,
     pub from_account_id: Option<Uuid>,
     pub to_account_id: Uuid,
     pub amount: EncryptedField<f64>,
-    pub timestamp: NaiveDateTime,
+    pub created_at: NaiveDateTime,
 }
 
 impl Transaction {
     pub fn new(
         from_account_id: Option<Uuid>,
         to_account_id: Uuid,
-        transaction_type: TransactionType,
+        operation: TransactionOperation,
         amount: f64,
         user_key: &[u8],
     ) -> Result<Self, Box<dyn std::error::Error>> {
@@ -41,11 +41,11 @@ impl Transaction {
         let key = decrypt_user_key(user_key, &master_key)?;
         Ok(Transaction {
             id: Uuid::new_v4(),
-            _type: transaction_type,
+            operation,
             from_account_id,
             to_account_id,
             amount: amount.encrypt(&key)?,
-            timestamp: chrono::Utc::now().naive_utc(),
+            created_at: chrono::Utc::now().naive_utc(),
         })
     }
 
@@ -58,8 +58,7 @@ impl Transaction {
 
 #[derive(Debug, Deserialize)]
 pub struct TransactionCreate {
-    #[serde(rename = "type")]
-    pub _type: TransactionType,
+    pub operation: TransactionOperation,
     pub from_account_id: Option<Uuid>,
     pub to_account_id: Uuid,
     pub amount: f64,
@@ -71,11 +70,11 @@ impl TransactionCreate {
         let key = decrypt_user_key(user_key, &master_key)?;
         Ok(Transaction {
             id: Uuid::new_v4(),
-            _type: self._type.clone(),
+            operation: self.operation.clone(),
             from_account_id: self.from_account_id,
             to_account_id: self.to_account_id,
             amount: self.amount.encrypt(&key)?,
-            timestamp: chrono::Utc::now().naive_utc(),
+            created_at: chrono::Utc::now().naive_utc(),
         })
     }
 }
@@ -83,12 +82,11 @@ impl TransactionCreate {
 #[derive(Debug, Serialize)]
 pub struct TransactionModel {
     pub id: Uuid,
-    #[serde(rename = "type")]
-    pub _type: TransactionType,
+    pub operation: TransactionOperation,
     pub from_account_id: Option<Uuid>,
     pub to_account_id: Uuid,
     pub amount: f64,
-    pub timestamp: NaiveDateTime,
+    pub created_at: NaiveDateTime,
 }
 
 impl TransactionModel {
@@ -100,11 +98,11 @@ impl TransactionModel {
         let key = decrypt_user_key(user_key, &master)?;
         Ok(TransactionModel {
             id: transaction.id,
-            _type: transaction._type.clone(),
+            operation: transaction.operation.clone(),
             from_account_id: transaction.from_account_id,
             to_account_id: transaction.to_account_id,
             amount: f64::decrypt(&transaction.amount, &key)?,
-            timestamp: transaction.timestamp,
+            created_at: transaction.created_at,
         })
     }
 }
@@ -131,7 +129,7 @@ mod tests {
         let transaction = Transaction::new(
             Some(from_account_id),
             to_account_id,
-            TransactionType::Deposit,
+            TransactionOperation::Deposit,
             amount,
             &user.encryption_key,
         )
@@ -167,7 +165,7 @@ mod tests {
         let transaction = Transaction::new(
             Some(from_account_id),
             to_account_id,
-            TransactionType::Deposit,
+            TransactionOperation::Deposit,
             amount,
             &user.encryption_key,
         )

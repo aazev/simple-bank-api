@@ -12,10 +12,10 @@ use database::{
         transaction_dto::{TransactionCreate, TransactionModel},
         user_dto::User,
     },
-    repositories::{
-        accounts::AccountRepository, transactions::TransactionRepository, users::UserRepository,
+    services::{
+        account::Service as AccountService, transaction::Service as TransactionService,
+        user::Service as UserService,
     },
-    traits::repository::Repository,
 };
 use futures::{stream, StreamExt};
 use uuid::Uuid;
@@ -43,18 +43,18 @@ pub async fn get_account_transactions(
     Path(account_id): Path<Uuid>,
     Query(mut filters): Query<TransactionFilter>,
 ) -> Result<Json<ReturnTypes<TransactionModel>>, (StatusCode, Json<HttpResponse>)> {
-    let transaction_repository = TransactionRepository::new(state.db_pool.clone());
-    let user_repository = UserRepository::new(state.db_pool.clone());
-    let account_repository = AccountRepository::new(state.db_pool.clone());
+    let mut tx = state.db_pool.begin().await.unwrap();
+    let transaction_service = TransactionService::new();
+    let account_service = AccountService::new();
 
-    let account = match account_repository.find_by_id(&account_id).await {
-        Ok(account) => account,
-        Err(err) => {
+    let account = match account_service.get_one_by_id(&mut tx, &account_id).await {
+        Some(account) => account,
+        None => {
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(HttpResponse::new(
                     StatusCode::NOT_FOUND.as_u16(),
-                    err.to_string(),
+                    "Account not found".to_string(),
                     None,
                 )),
             ))
@@ -74,50 +74,37 @@ pub async fn get_account_transactions(
     filters.to_account_id = Some(account.id);
     filters.enforce_pagination();
 
-    match transaction_repository.find_all(&filters).await {
-        Ok(transactions) => {
-            let total = transaction_repository
-                .get_total(&TransactionFilter::default())
-                .await
-                .unwrap();
-            let transaction_models = stream::iter(transactions)
-                .enumerate()
-                .map(|(_index, transaction)| {
-                    let account_repository = account_repository.clone();
-                    let user_repository = user_repository.clone();
-                    async move {
-                        let account = account_repository
-                            .find_by_id(&transaction.to_account_id)
-                            .await
-                            .unwrap();
-                        let user = user_repository.find_by_id(&account.user_id).await.unwrap();
-                        TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap()
-                    }
-                })
-                .buffered(10)
-                .collect::<Vec<TransactionModel>>()
-                .await;
-            match filters.offset {
-                Some(offset) => {
-                    let paginated = HttpPaginatedResponse::new(
-                        transaction_models,
-                        offset,
-                        filters.limit,
-                        total,
-                    );
-                    Ok(Json(ReturnTypes::Paginated(paginated)))
-                }
-                None => Ok(Json(ReturnTypes::Multiple(transaction_models))),
+    let (transactions, total) = transaction_service.get_all(&mut tx, &filters).await;
+    let transaction_models = stream::iter(transactions)
+        .enumerate()
+        .map(|(_index, transaction)| {
+            let db_pool = state.db_pool.clone();
+            let account_service = AccountService::new();
+            let user_service = UserService::new();
+            async move {
+                let mut tx = db_pool.begin().await.unwrap();
+                let account = account_service
+                    .get_one_by_id(&mut tx, &account_id)
+                    .await
+                    .unwrap();
+                let user = user_service
+                    .get_one_by_id(&mut tx, &account.user_id)
+                    .await
+                    .unwrap();
+                TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap()
             }
+        })
+        .buffered(10)
+        .collect::<Vec<TransactionModel>>()
+        .await;
+
+    match filters.offset {
+        Some(offset) => {
+            let paginated =
+                HttpPaginatedResponse::new(transaction_models, offset, filters.limit, total);
+            Ok(Json(ReturnTypes::Paginated(paginated)))
         }
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(HttpResponse::new(
-                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                err.to_string(),
-                None,
-            )),
-        )),
+        None => Ok(Json(ReturnTypes::Multiple(transaction_models))),
     }
 }
 
@@ -128,18 +115,19 @@ pub async fn create_account_transaction(
     Path(account_id): Path<Uuid>,
     Json(transaction): Json<TransactionCreate>,
 ) -> Result<Json<ReturnTypes<TransactionModel>>, (StatusCode, Json<HttpResponse>)> {
-    let transaction_repository = TransactionRepository::new(state.db_pool.clone());
-    let user_repository = UserRepository::new(state.db_pool.clone());
-    let account_repository = AccountRepository::new(state.db_pool.clone());
+    let mut tx = state.db_pool.begin().await.unwrap();
+    let transaction_service = TransactionService::new();
+    let account_service = AccountService::new();
+    let user_service = UserService::new();
 
-    let account = match account_repository.find_by_id(&account_id).await {
-        Ok(account) => account,
-        Err(err) => {
+    let account = match account_service.get_one_by_id(&mut tx, &account_id).await {
+        Some(account) => account,
+        None => {
             return Err((
                 StatusCode::NOT_FOUND,
                 Json(HttpResponse::new(
                     StatusCode::NOT_FOUND.as_u16(),
-                    err.to_string(),
+                    "Account not found".to_string(),
                     None,
                 )),
             ))
@@ -157,21 +145,28 @@ pub async fn create_account_transaction(
         ));
     }
 
-    let user = user_repository.find_by_id(&account.user_id).await.unwrap();
-
-    match transaction_repository.create(&transaction).await {
+    let user = user_service
+        .get_one_by_id(&mut tx, &account.user_id)
+        .await
+        .unwrap();
+    match transaction_service.create(&mut tx, &transaction).await {
         Ok(transaction) => {
             let transaction_model =
                 TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap();
+
+            tx.commit().await.unwrap();
             Ok(Json(ReturnTypes::Single(transaction_model)))
         }
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(HttpResponse::new(
-                StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                err.to_string(),
-                None,
-            )),
-        )),
+        Err(_) => {
+            tx.rollback().await.unwrap();
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(HttpResponse::new(
+                    StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                    "Error creating transaction".to_string(),
+                    None,
+                )),
+            ))
+        }
     }
 }

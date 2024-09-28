@@ -3,13 +3,20 @@ macro_rules! impl_filterable {
     (
         $struct_name:ident,
         exact = [$($exact_field:ident),*],
-        range = [$($range_field:ident),*]
+        range = [$($range_field:ident),*],
+        order_by = [ $( ($order_field:ident, $order_direction:ident) ),* $(,)? ]
     ) => {
         use sqlx::{postgres::PgArguments, Arguments};
 
         impl $struct_name {
             pub fn query(&self) -> String {
                 let mut conditions = Vec::new();
+                // let mut order = "ORDER BY ID ASC, created_at ASC".to_string();
+                // if let Some(structure) = self.structure {
+                //     match structure {
+                //         "TransactionFilter"
+                //     }
+                // }
 
                 $(
                     if self.$exact_field.is_some() {
@@ -35,6 +42,18 @@ macro_rules! impl_filterable {
                     "WHERE ".to_owned() + &conditions.join(" AND ")
                 };
 
+                let order_clause = {
+                    let mut orders = Vec::new();
+                    $(
+                        orders.push(format!("{} {}", stringify!($order_field), stringify!($order_direction).to_uppercase()));
+                    )*
+                    if orders.is_empty() {
+                        "ORDER BY ID ASC".to_string()
+                    } else {
+                        "ORDER BY ".to_owned() + &orders.join(", ")
+                    }
+                };
+
                 let limit_clause = match (self.limit, self.offset) {
                     (Some(limit), _) => format!("LIMIT {}", limit),
                     (None, Some(_)) => format!("LIMIT {}", 25),
@@ -44,8 +63,9 @@ macro_rules! impl_filterable {
                 let offset_clause = self.offset.map_or(String::new(), |o| format!("OFFSET {}", o));
 
                 format!(
-                    "{} ORDER BY ID ASC, created_at ASC {} {}",
+                    "{} {} {} {}",
                     where_clause,
+                    order_clause,
                     offset_clause,
                     limit_clause,
                 )

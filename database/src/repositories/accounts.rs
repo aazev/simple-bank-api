@@ -2,6 +2,7 @@ use crate::{
     filters::account::Filter as AccountFilter,
     models::{
         account_dto::{Account, AccountCreate},
+        transaction_dto::{TransactionCreate, TransactionOperation},
         user_dto::User,
     },
 };
@@ -10,6 +11,13 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct AccountRepository;
+
+impl Default for AccountRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AccountRepository {
     pub fn new() -> Self {
         Self
@@ -79,10 +87,11 @@ impl AccountRepository {
             r#"
             INSERT INTO accounts (id, user_id, balance)
             VALUES ($1, $2, $3)
+            RETURNING *
             "#,
         )
-        .bind(&account.id)
-        .bind(&account.user_id)
+        .bind(account.id)
+        .bind(account.user_id)
         .bind(&account.balance)
         .execute(&mut **executor)
         .await?;
@@ -105,8 +114,59 @@ impl AccountRepository {
             "#,
         )
         .bind(id)
-        .bind(&account.user_id)
-        .bind(&account.balance)
+        .bind(account.user_id)
+        .bind(account.balance)
+        .fetch_one(&mut **executor)
+        .await?;
+
+        Ok(account)
+    }
+
+    pub async fn update_balance(
+        &self,
+        executor: &mut Transaction<'_, Postgres>,
+        transaction: &TransactionCreate,
+        amount: f64,
+    ) -> anyhow::Result<Account> {
+        let mut account = self
+            .find_by_id(executor, &transaction.to_account_id)
+            .await?;
+        let user = sqlx::query_as::<_, User>(
+            r#"
+            SELECT * FROM users
+            WHERE id = $1
+            "#,
+        )
+        .bind(account.user_id)
+        .fetch_one(&mut **executor)
+        .await?;
+
+        let balance = account.get_balance(&user)?;
+        let new_balance = match &transaction.operation {
+            TransactionOperation::Deposit => balance + amount,
+            TransactionOperation::Fee => balance - amount,
+            TransactionOperation::Interest => balance + amount,
+            TransactionOperation::Payment => balance - amount,
+            TransactionOperation::Withdrawal => balance - amount,
+            TransactionOperation::Transfer => {
+                return Err(anyhow::anyhow!(
+                    "Transfer operations not allowed at the moment."
+                ))
+            }
+        };
+
+        account.update_balance(&user, new_balance)?;
+
+        let account = sqlx::query_as::<_, Account>(
+            r#"
+            UPDATE accounts
+            SET balance = $2
+            WHERE id = $1
+            RETURNING *
+            "#,
+        )
+        .bind(account.id)
+        .bind(account.balance)
         .fetch_one(&mut **executor)
         .await?;
 

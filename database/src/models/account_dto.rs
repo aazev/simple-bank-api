@@ -37,6 +37,14 @@ impl Account {
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(f64::decrypt(&self.balance, &key)?)
     }
+
+    pub fn update_balance(&mut self, user: &User, new_balance: f64) -> Result<(), anyhow::Error> {
+        let master_key = load_master_key()?;
+        let key = decrypt_user_key(&user.encryption_key, &master_key)?;
+        self.balance = new_balance.encrypt(&key)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize)]

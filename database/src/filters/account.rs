@@ -14,4 +14,9 @@ pub struct Filter {
     pub limit: Option<usize>,
 }
 
-impl_filterable!(Filter, exact = [id, user_id], range = []);
+impl_filterable!(
+    Filter,
+    exact = [id, user_id],
+    range = [],
+    order_by = [(created_at, asc), (id, asc)]
+);

@@ -3,13 +3,23 @@ use uuid::Uuid;
 
 use crate::{
     filters::transaction::Filter as TransactionFilter,
-    models::transaction_dto::{Transaction, TransactionCreate},
+    models::{
+        account_dto::Account,
+        transaction_dto::{Transaction, TransactionCreate},
+    },
 };
 
-use super::{accounts::AccountRepository, users::UserRepository};
+use super::users::UserRepository;
 
 #[derive(Debug, Clone)]
 pub struct TransactionRepository;
+
+impl Default for TransactionRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TransactionRepository {
     pub fn new() -> Self {
         Self
@@ -21,7 +31,7 @@ impl TransactionRepository {
         filters: &TransactionFilter,
     ) -> anyhow::Result<Vec<Transaction>> {
         let args = filters.get_arguments();
-        let query = r#"SELECT * from users "#.to_owned() + &filters.query();
+        let query = r#"SELECT * from transactions "#.to_owned() + &filters.query();
 
         let transactions = sqlx::query_as_with::<_, Transaction, _>(&query, args)
             .fetch_all(&mut **executor)
@@ -36,7 +46,7 @@ impl TransactionRepository {
         filters: &TransactionFilter,
     ) -> anyhow::Result<Transaction> {
         let args = filters.get_arguments();
-        let query = r#"SELECT * from users "#.to_owned() + &filters.query();
+        let query = r#"SELECT * from transactions "#.to_owned() + &filters.query();
 
         let transaction = sqlx::query_as_with::<_, Transaction, _>(&query, args)
             .fetch_one(&mut **executor)
@@ -50,10 +60,11 @@ impl TransactionRepository {
         executor: &mut SqlxTransaction<'_, Postgres>,
         id: &Uuid,
     ) -> anyhow::Result<Transaction> {
-        let transaction = sqlx::query_as::<_, Transaction>(r#"SELECT * from users WHERE id = $1"#)
-            .bind(id)
-            .fetch_one(&mut **executor)
-            .await?;
+        let transaction =
+            sqlx::query_as::<_, Transaction>(r#"SELECT * from transactions WHERE id = $1"#)
+                .bind(id)
+                .fetch_one(&mut **executor)
+                .await?;
 
         Ok(transaction)
     }
@@ -61,14 +72,12 @@ impl TransactionRepository {
     pub async fn create(
         &self,
         executor: &mut SqlxTransaction<'_, Postgres>,
+        account: &Account,
         transaction_create: &TransactionCreate,
     ) -> anyhow::Result<Transaction> {
-        let account_repository = AccountRepository::new();
+        let transaction_id = Uuid::now_v7();
         let user_repository = UserRepository::new();
 
-        let account = account_repository
-            .find_by_id(executor, &transaction_create.to_account_id)
-            .await?;
         let user = user_repository
             .find_by_id(executor, &account.user_id)
             .await?;
@@ -76,11 +85,12 @@ impl TransactionRepository {
         let transaction = transaction_create.to_transaction(&user.encryption_key)?;
 
         let created_transaction = sqlx::query_as::<_, Transaction>(
-            r#"INSERT INTO transactions (type, from_account_id, to_account_id, amount) VALUES ($1, $2, $3, $4) RETURNING *"#,
+            r#"INSERT INTO transactions (id, operation, from_account_id, to_account_id, amount) VALUES ($1, $2, $3, $4, $5) RETURNING *"#,
         )
-        .bind(&transaction._type)
-        .bind(&transaction.from_account_id)
-        .bind(&transaction.to_account_id)
+        .bind(transaction_id)
+        .bind(&transaction.operation)
+        .bind(transaction.from_account_id)
+        .bind(transaction.to_account_id)
         .bind(&transaction.amount)
         .fetch_one(&mut **executor)
         .await?;
@@ -113,5 +123,18 @@ impl TransactionRepository {
             .await?;
 
         Ok(result.get::<i64, &str>("total") as u64)
+    }
+
+    pub async fn delete_by_account_id(
+        &self,
+        executor: &mut SqlxTransaction<'_, Postgres>,
+        account_id: &Uuid,
+    ) -> anyhow::Result<()> {
+        sqlx::query(r#"DELETE FROM transactions WHERE to_account_id = $1"#)
+            .bind(account_id)
+            .execute(&mut **executor)
+            .await?;
+
+        Ok(())
     }
 }
