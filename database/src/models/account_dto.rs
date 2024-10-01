@@ -151,7 +151,8 @@ mod tests {
         .expect("User creation failed");
         let initial_balance = 1000.0;
 
-        let account = Account::new(&user, initial_balance).expect("Account creation failed");
+        let account = Account::new(&user, initial_balance, None, None, None, None, None, None)
+            .expect("Account creation failed");
 
         let balance = account.get_balance(&user).expect("Failed to get balance");
 
@@ -176,7 +177,8 @@ mod tests {
         .expect("User creation failed");
         let initial_balance = 1000.0;
 
-        let account = Account::new(&user, initial_balance).expect("Account creation failed");
+        let account = Account::new(&user, initial_balance, None, None, None, None, None, None)
+            .expect("Account creation failed");
 
         let result = account.get_balance(&wrong_user);
 
