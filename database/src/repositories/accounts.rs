@@ -85,13 +85,29 @@ impl AccountRepository {
 
         sqlx::query(
             r#"
-            INSERT INTO accounts (id, user_id, balance)
-            VALUES ($1, $2, $3)
+            INSERT INTO accounts (
+                id,
+                user_id,
+                bank_id,
+                bank_account_number,
+                bank_account_digit,
+                bank_agency_number,
+                bank_agency_digit,
+                bank_account_type,
+                balance
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
             "#,
         )
         .bind(account.id)
         .bind(account.user_id)
+        .bind(account.bank_id)
+        .bind(account.bank_account_number)
+        .bind(account.bank_account_digit)
+        .bind(account.bank_agency_number)
+        .bind(account.bank_agency_digit)
+        .bind(account.bank_account_type)
         .bind(&account.balance)
         .execute(&mut **executor)
         .await?;
@@ -108,13 +124,27 @@ impl AccountRepository {
         let account = sqlx::query_as::<_, Account>(
             r#"
             UPDATE accounts
-            SET user_id = $2, balance = $3
+            SET
+                user_id = $2,
+                bank_id = $3,
+                bank_account_number = $4,
+                bank_account_digit = $5,
+                bank_agency_number = $6,
+                bank_agency_digit = $7,
+                bank_account_type = $8,
+                balance = $9
             WHERE id = $1
             RETURNING *
             "#,
         )
         .bind(id)
         .bind(account.user_id)
+        .bind(account.bank_id)
+        .bind(account.bank_account_number)
+        .bind(account.bank_account_digit)
+        .bind(account.bank_agency_number)
+        .bind(account.bank_agency_digit)
+        .bind(account.bank_account_type)
         .bind(account.balance)
         .fetch_one(&mut **executor)
         .await?;

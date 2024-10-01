@@ -14,18 +14,40 @@ use super::user_dto::User;
 pub struct Account {
     pub id: Uuid,
     pub user_id: Uuid, // Owner of the account
+    pub bank_id: Option<i32>,
+    pub bank_account_number: Option<i32>,
+    pub bank_account_digit: Option<i32>,
+    pub bank_agency_number: Option<i32>,
+    pub bank_agency_digit: Option<i32>,
+    pub bank_account_type: Option<i32>,
     pub balance: EncryptedField<f64>,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
 }
 
 impl Account {
-    pub fn new(user: &User, balance: f64) -> Result<Self, anyhow::Error> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        user: &User,
+        balance: f64,
+        bank_id: Option<i32>,
+        bank_account_number: Option<i32>,
+        bank_account_digit: Option<i32>,
+        bank_agency_number: Option<i32>,
+        bank_agency_digit: Option<i32>,
+        bank_account_type: Option<i32>,
+    ) -> Result<Self, anyhow::Error> {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(Self {
             id: Uuid::now_v7(),
             user_id: user.id,
+            bank_id,
+            bank_account_number,
+            bank_account_digit,
+            bank_agency_number,
+            bank_agency_digit,
+            bank_account_type,
             balance: balance.encrypt(&key)?,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: None,
@@ -50,6 +72,12 @@ impl Account {
 #[derive(Debug, Deserialize)]
 pub struct AccountCreate {
     pub user_id: Uuid,
+    pub bank_id: Option<i32>,
+    pub bank_account_number: Option<i32>,
+    pub bank_account_digit: Option<i32>,
+    pub bank_agency_number: Option<i32>,
+    pub bank_agency_digit: Option<i32>,
+    pub bank_account_type: Option<i32>,
     pub balance: f64,
 }
 
@@ -60,6 +88,12 @@ impl AccountCreate {
         Ok(Account {
             id: Uuid::now_v7(),
             user_id: self.user_id,
+            bank_id: self.bank_id,
+            bank_account_number: self.bank_account_number,
+            bank_account_digit: self.bank_account_digit,
+            bank_agency_number: self.bank_agency_number,
+            bank_agency_digit: self.bank_agency_digit,
+            bank_account_type: self.bank_account_type,
             balance: self.balance.encrypt(&key)?,
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: None,
@@ -71,6 +105,12 @@ impl AccountCreate {
 pub struct AccountModel {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub bank_id: Option<i32>,
+    pub bank_account_number: Option<i32>,
+    pub bank_account_digit: Option<i32>,
+    pub bank_agency_number: Option<i32>,
+    pub bank_agency_digit: Option<i32>,
+    pub bank_account_type: Option<i32>,
     pub balance: f64,
     pub created_at: NaiveDateTime,
     pub updated_at: Option<NaiveDateTime>,
@@ -83,6 +123,12 @@ impl AccountModel {
         Ok(Self {
             id: account.id,
             user_id: account.user_id,
+            bank_id: account.bank_id,
+            bank_account_number: account.bank_account_number,
+            bank_account_digit: account.bank_account_digit,
+            bank_agency_number: account.bank_agency_number,
+            bank_agency_digit: account.bank_agency_digit,
+            bank_account_type: account.bank_account_type,
             balance: f64::decrypt(&account.balance, &key)?,
             created_at: account.created_at,
             updated_at: account.updated_at,
