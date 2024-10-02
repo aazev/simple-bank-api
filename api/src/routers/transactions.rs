@@ -43,11 +43,13 @@ pub async fn get_account_transactions(
     Path(account_id): Path<Uuid>,
     Query(mut filters): Query<TransactionFilter>,
 ) -> Result<Json<ReturnTypes<TransactionModel>>, (StatusCode, Json<HttpResponse>)> {
-    let mut tx = state.db_pool.begin().await.unwrap();
     let transaction_service = TransactionService::new();
     let account_service = AccountService::new();
 
-    let account = match account_service.get_one_by_id(&mut tx, &account_id).await {
+    let account = match account_service
+        .get_one_by_id(&state.db_pool, &account_id)
+        .await
+    {
         Some(account) => account,
         None => {
             return Err((
@@ -74,7 +76,7 @@ pub async fn get_account_transactions(
     filters.to_account_id = Some(account.id);
     filters.enforce_pagination();
 
-    let (transactions, total) = transaction_service.get_all(&mut tx, &filters).await;
+    let (transactions, total) = transaction_service.get_all(&state.db_pool, &filters).await;
     let transaction_models = stream::iter(transactions)
         .enumerate()
         .map(|(_index, transaction)| {
@@ -82,13 +84,12 @@ pub async fn get_account_transactions(
             let account_service = AccountService::new();
             let user_service = UserService::new();
             async move {
-                let mut tx = db_pool.begin().await.unwrap();
                 let account = account_service
-                    .get_one_by_id(&mut tx, &account_id)
+                    .get_one_by_id(&db_pool, &account_id)
                     .await
                     .unwrap();
                 let user = user_service
-                    .get_one_by_id(&mut tx, &account.user_id)
+                    .get_one_by_id(&db_pool, &account.user_id)
                     .await
                     .unwrap();
                 TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap()
@@ -120,7 +121,10 @@ pub async fn create_account_transaction(
     let account_service = AccountService::new();
     let user_service = UserService::new();
 
-    let account = match account_service.get_one_by_id(&mut tx, &account_id).await {
+    let account = match account_service
+        .get_one_by_id(&state.db_pool, &account_id)
+        .await
+    {
         Some(account) => account,
         None => {
             return Err((
@@ -146,10 +150,13 @@ pub async fn create_account_transaction(
     }
 
     let user = user_service
-        .get_one_by_id(&mut tx, &account.user_id)
+        .get_one_by_id(&state.db_pool, &account.user_id)
         .await
         .unwrap();
-    match transaction_service.create(&mut tx, &transaction).await {
+    match transaction_service
+        .create(&state.db_pool, &mut tx, &transaction)
+        .await
+    {
         Ok(transaction) => {
             let transaction_model =
                 TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap();

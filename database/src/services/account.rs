@@ -1,4 +1,4 @@
-use sqlx::{Postgres, Transaction as SqlxTransaction};
+use sqlx::{PgPool, Postgres, Transaction as SqlxTransaction};
 use uuid::Uuid;
 
 use crate::{
@@ -34,52 +34,41 @@ impl Service {
         }
     }
 
-    pub async fn get_one_by_id(
-        &self,
-        executor: &mut SqlxTransaction<'_, Postgres>,
-        id: &Uuid,
-    ) -> Option<Account> {
+    pub async fn get_one_by_id(&self, db_pool: &PgPool, id: &Uuid) -> Option<Account> {
         // if we had a logging system, we would log the error here
-        match self.account_repository.find_by_id(executor, id).await {
+        match self.account_repository.find_by_id(db_pool, id).await {
             Ok(account) => Some(account),
             Err(_) => None,
         }
     }
 
-    pub async fn get_all(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        filters: &AccountFilter,
-    ) -> (Vec<Account>, u64) {
+    pub async fn get_all(&self, db_pool: &PgPool, filters: &AccountFilter) -> (Vec<Account>, u64) {
         // if we had a logging system, we would log the error here
-        let accounts = (self.account_repository.find_all(tx, filters).await).unwrap_or_default();
-        let total = (self.account_repository.get_total(tx, filters).await).unwrap_or(0);
+        let accounts =
+            (self.account_repository.find_all(db_pool, filters).await).unwrap_or_default();
+        let total = (self.account_repository.get_total(db_pool, filters).await).unwrap_or(0);
 
         (accounts, total)
     }
 
-    pub async fn get_one_by_user_id(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        user_id: &Uuid,
-    ) -> Option<Account> {
+    pub async fn get_one_by_user_id(&self, db_pool: &PgPool, user_id: &Uuid) -> Option<Account> {
         // if we had a logging system, we would log the error here
-        match self.account_repository.find_by_id(tx, user_id).await {
+        match self.account_repository.find_by_id(db_pool, user_id).await {
             Ok(account) => Some(account),
             Err(_) => None,
         }
     }
 
-    pub async fn get_one_by_user_email(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        email: &str,
-    ) -> Option<Account> {
+    pub async fn get_one_by_user_email(&self, db_pool: &PgPool, email: &str) -> Option<Account> {
         let filter = UserFilter {
             email: Some(email.to_string()),
             ..Default::default()
         };
-        let user = match self.user_repository.find_one_by_filter(tx, &filter).await {
+        let user = match self
+            .user_repository
+            .find_one_by_filter(db_pool, &filter)
+            .await
+        {
             Ok(user) => match user {
                 Some(user) => user,
                 None => return None,
@@ -94,7 +83,7 @@ impl Service {
         // if we had a logging system, we would log the error here
         match self
             .account_repository
-            .find_one_by_filter(tx, &filter)
+            .find_one_by_filter(db_pool, &filter)
             .await
         {
             Ok(account) => Some(account),
@@ -104,6 +93,7 @@ impl Service {
 
     pub async fn create(
         &self,
+        db_pool: &PgPool,
         tx: &mut SqlxTransaction<'_, Postgres>,
         user_id: &Uuid,
         account: AccountCreate,
@@ -114,7 +104,7 @@ impl Service {
 
         let initial_balance = account.balance;
 
-        let user = self.user_repository.find_by_id(tx, user_id).await?;
+        let user = self.user_repository.find_by_id(db_pool, user_id).await?;
 
         let account = self.account_repository.create(tx, &user, &account).await?;
 
@@ -126,7 +116,7 @@ impl Service {
         };
 
         self.transaction_repository
-            .create(tx, &account, &transaction)
+            .create(db_pool, tx, &account, &transaction)
             .await?;
 
         Ok(account)

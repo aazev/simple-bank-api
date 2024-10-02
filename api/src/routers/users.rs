@@ -32,11 +32,9 @@ pub async fn get_users(
     Query(mut filters): Query<UserFilter>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<HttpResponse>)> {
     let user_service = UserService::new();
-    let mut tx = state.db_pool.begin().await.unwrap();
 
     filters.enforce_pagination();
-    let (users, total) = user_service.get_all(&mut tx, &filters).await;
-    tx.rollback().await.unwrap();
+    let (users, total) = user_service.get_all(&state.db_pool, &filters).await;
 
     match filters.offset {
         Some(offset) => Ok(Json(ReturnTypes::Paginated(HttpPaginatedResponse::new(
@@ -54,17 +52,10 @@ pub async fn get_user(
     Path(id): Path<Uuid>,
 ) -> Result<Json<ReturnTypes<User>>, (StatusCode, Json<String>)> {
     let user_service = UserService::new();
-    let mut tx = state.db_pool.begin().await.unwrap();
 
-    match user_service.get_one_by_id(&mut tx, &id).await {
-        Some(user) => {
-            tx.rollback().await.unwrap();
-            Ok(Json(ReturnTypes::Single(user)))
-        }
-        None => {
-            tx.rollback().await.unwrap();
-            Err((StatusCode::NOT_FOUND, Json("User not found".to_string())))
-        }
+    match user_service.get_one_by_id(&state.db_pool, &id).await {
+        Some(user) => Ok(Json(ReturnTypes::Single(user))),
+        None => Err((StatusCode::NOT_FOUND, Json("User not found".to_string()))),
     }
 }
 
@@ -96,8 +87,14 @@ pub async fn update_user(
     let mut tx = state.db_pool.begin().await.unwrap();
 
     match user_service.update(&mut tx, &id, &user).await {
-        Ok(user) => Ok(Json(ReturnTypes::Single(user))),
-        Err(err) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string()))),
+        Ok(user) => {
+            tx.commit().await.unwrap();
+            Ok(Json(ReturnTypes::Single(user)))
+        }
+        Err(err) => {
+            tx.rollback().await.unwrap();
+            Err((StatusCode::INTERNAL_SERVER_ERROR, Json(err.to_string())))
+        }
     }
 }
 

@@ -100,8 +100,10 @@ pub async fn auth(
     }
 
     let user_service = UserService::new();
-    let mut tx = state.db_pool.begin().await.unwrap();
-    match user_service.get_one_by_id(&mut tx, &payload.user_id).await {
+    match user_service
+        .get_one_by_id(&state.db_pool, &payload.user_id)
+        .await
+    {
         Some(user) => {
             req.extensions_mut().insert(user);
             req.extensions_mut().insert(payload.scopes);

@@ -1,4 +1,4 @@
-use sqlx::{Postgres, Transaction as SqlxTransaction};
+use sqlx::{PgPool, Postgres, Transaction as SqlxTransaction};
 use uuid::Uuid;
 
 use crate::{
@@ -25,49 +25,41 @@ impl Service {
         }
     }
 
-    pub async fn get_all(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        filters: &UserFilter,
-    ) -> (Vec<User>, u64) {
-        let users = (self.user_repository.find_all(tx, filters).await).unwrap_or_default();
-        let total = (self.user_repository.get_total(tx, filters).await).unwrap_or(0);
+    pub async fn get_all(&self, db_pool: &PgPool, filters: &UserFilter) -> (Vec<User>, u64) {
+        let users = (self.user_repository.find_all(db_pool, filters).await).unwrap_or_default();
+        let total = (self.user_repository.get_total(db_pool, filters).await).unwrap_or(0);
 
         (users, total)
     }
 
-    pub async fn get_one_by_id(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        id: &Uuid,
-    ) -> Option<User> {
+    pub async fn get_one_by_id(&self, db_pool: &PgPool, id: &Uuid) -> Option<User> {
         // if we had a logging system, we would log the error here
-        match self.user_repository.find_by_id(tx, id).await {
+        match self.user_repository.find_by_id(db_pool, id).await {
             Ok(user) => Some(user),
             Err(_) => None,
         }
     }
 
-    pub async fn get_one_by_email(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        email: &str,
-    ) -> Option<User> {
+    pub async fn get_one_by_email(&self, db_pool: &PgPool, email: &str) -> Option<User> {
         let filter = UserFilter {
             email: Some(email.to_string()),
             ..Default::default()
         };
         // if we had a logging system, we would log the error here
-        (self.user_repository.find_one_by_filter(tx, &filter).await).unwrap_or_default()
+        (self
+            .user_repository
+            .find_one_by_filter(db_pool, &filter)
+            .await)
+            .unwrap_or_default()
     }
 
-    pub async fn get_one_by_filter(
-        &self,
-        tx: &mut SqlxTransaction<'_, Postgres>,
-        filter: &UserFilter,
-    ) -> Option<User> {
+    pub async fn get_one_by_filter(&self, db_pool: &PgPool, filter: &UserFilter) -> Option<User> {
         // if we had a logging system, we would log the error here
-        (self.user_repository.find_one_by_filter(tx, filter).await).unwrap_or_default()
+        (self
+            .user_repository
+            .find_one_by_filter(db_pool, filter)
+            .await)
+            .unwrap_or_default()
     }
 
     pub async fn create(

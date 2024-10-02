@@ -36,18 +36,17 @@ pub async fn get_accounts(
 ) -> Result<Json<ReturnTypes<AccountModel>>, (StatusCode, Json<HttpResponse>)> {
     let account_service = AccountService::new();
     let user_service = UserService::new();
-    let mut tx = state.db_pool.begin().await.unwrap();
 
     if !scopes.contains(&"admin".to_string()) {
         let user = user_service
-            .get_one_by_id(&mut tx, &current_user.id)
+            .get_one_by_id(&state.db_pool, &current_user.id)
             .await
             .unwrap();
         filters.user_id = Some(user.id);
     }
     filters.enforce_pagination();
 
-    let (accounts, total) = account_service.get_all(&mut tx, &filters).await;
+    let (accounts, total) = account_service.get_all(&state.db_pool, &filters).await;
 
     let account_models: Vec<AccountModel> = stream::iter(accounts)
         .enumerate()
@@ -55,9 +54,9 @@ pub async fn get_accounts(
             let user_service = UserService::new();
             let db_pool = state.db_pool.clone();
             async move {
-                let mut tx = db_pool.begin().await.unwrap();
+                let db_pool = db_pool.clone();
                 let user = user_service
-                    .get_one_by_id(&mut tx, &account.user_id)
+                    .get_one_by_id(&db_pool, &account.user_id)
                     .await
                     .unwrap();
                 AccountModel::from_dto(&account, &user).unwrap()
@@ -87,12 +86,12 @@ pub async fn create_account(
     let user_service = UserService::new();
 
     let user = user_service
-        .get_one_by_id(&mut tx, &account.user_id)
+        .get_one_by_id(&state.db_pool, &account.user_id)
         .await
         .unwrap();
 
     match account_service
-        .create(&mut tx, &account.user_id.clone(), account)
+        .create(&state.db_pool, &mut tx, &account.user_id.clone(), account)
         .await
     {
         Ok(account) => {
@@ -120,15 +119,14 @@ pub async fn get_account(
     Extension(scopes): Extension<Vec<String>>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ReturnTypes<AccountModel>>, (StatusCode, Json<HttpResponse>)> {
-    let mut tx = state.db_pool.begin().await.unwrap();
     let account_service = AccountService::new();
     let user_service = UserService::new();
 
-    match account_service.get_one_by_id(&mut tx, &id).await {
+    match account_service.get_one_by_id(&state.db_pool, &id).await {
         Some(account) => {
             if !scopes.contains(&"admin".to_string()) {
                 let user = user_service
-                    .get_one_by_id(&mut tx, &current_user.id)
+                    .get_one_by_id(&state.db_pool, &current_user.id)
                     .await
                     .unwrap();
 
@@ -145,7 +143,7 @@ pub async fn get_account(
             }
 
             let user = user_service
-                .get_one_by_id(&mut tx, &account.user_id)
+                .get_one_by_id(&state.db_pool, &account.user_id)
                 .await
                 .unwrap();
             let account_model = AccountModel::from_dto(&account, &user).unwrap();
@@ -172,11 +170,11 @@ pub async fn delete_account(
     let user_service = UserService::new();
     let account_service = AccountService::new();
 
-    match account_service.get_one_by_id(&mut tx, &id).await {
+    match account_service.get_one_by_id(&state.db_pool, &id).await {
         Some(account) => {
             if !scopes.contains(&"admin".to_string()) {
                 let user = user_service
-                    .get_one_by_id(&mut tx, &current_user.id)
+                    .get_one_by_id(&state.db_pool, &current_user.id)
                     .await
                     .unwrap();
 
@@ -193,11 +191,14 @@ pub async fn delete_account(
             }
 
             match account_service.delete(&mut tx, &id).await {
-                true => Ok(Json(HttpResponse::new(
-                    StatusCode::NO_CONTENT.as_u16(),
-                    "Account deleted".to_string(),
-                    None,
-                ))),
+                true => {
+                    tx.commit().await.unwrap();
+                    Ok(Json(HttpResponse::new(
+                        StatusCode::NO_CONTENT.as_u16(),
+                        "Account deleted".to_string(),
+                        None,
+                    )))
+                }
                 false => {
                     tx.rollback().await.unwrap();
                     Err((

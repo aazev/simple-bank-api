@@ -32,17 +32,17 @@ pub async fn authorize_user(
     };
 
     let user_service = UserService::new();
-    let mut tx = state.db_pool.begin().await.unwrap();
 
-    match user_service.get_one_by_filter(&mut tx, &filter).await {
+    match user_service
+        .get_one_by_filter(&state.db_pool, &filter)
+        .await
+    {
         Some(user) => match verify_password(&user.password, &payload.password) {
             Ok(_) => {
                 let token_creation = Local::now().naive_utc();
                 let token_expiration = token_creation + Duration::hours(1);
                 let jwt_key: Hmac<Sha256> = Hmac::new_from_slice(state.jwt_key.as_bytes()).unwrap();
                 let token = JsonWebToken::new(user.id, payload.scopes, Some(token_expiration));
-
-                tx.rollback().await.unwrap();
 
                 match token.sign_with_key(&jwt_key) {
                     Ok(token) => {
@@ -59,30 +59,22 @@ pub async fn authorize_user(
                     )),
                 }
             }
-            Err(_) => {
-                tx.rollback().await.unwrap();
-
-                Err((
-                    StatusCode::FORBIDDEN,
-                    Json(HttpResponse {
-                        status: StatusCode::FORBIDDEN.as_u16(),
-                        message: "Invalid credentials".to_string(),
-                        fields: None,
-                    }),
-                ))
-            }
-        },
-        None => {
-            tx.rollback().await.unwrap();
-
-            Err((
-                StatusCode::UNAUTHORIZED,
+            Err(_) => Err((
+                StatusCode::FORBIDDEN,
                 Json(HttpResponse {
-                    status: StatusCode::UNAUTHORIZED.as_u16(),
-                    message: "Unauthorized".to_string(),
+                    status: StatusCode::FORBIDDEN.as_u16(),
+                    message: "Invalid credentials".to_string(),
                     fields: None,
                 }),
-            ))
-        }
+            )),
+        },
+        None => Err((
+            StatusCode::UNAUTHORIZED,
+            Json(HttpResponse {
+                status: StatusCode::UNAUTHORIZED.as_u16(),
+                message: "Unauthorized".to_string(),
+                fields: None,
+            }),
+        )),
     }
 }
