@@ -173,7 +173,7 @@ pub async fn create_account_transaction(
         }
         TransactionOperation::Transfer => {
             let from_account_id = match &transaction.from_account_id {
-                Some(id) => id.clone(),
+                Some(id) => *id,
                 None => {
                     return Err((
                         StatusCode::BAD_REQUEST,
@@ -247,7 +247,7 @@ pub async fn create_account_transaction(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(HttpResponse::new(
                         StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                        format!("Error creating transaction: {}", e.to_string()),
+                        format!("Error creating transaction: {}", e),
                         None,
                     )),
                 ))
