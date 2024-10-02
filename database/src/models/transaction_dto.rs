@@ -90,10 +90,7 @@ pub struct TransactionModel {
 }
 
 impl TransactionModel {
-    pub fn from_dto(
-        transaction: &Transaction,
-        user_key: &[u8],
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn from_dto(transaction: &Transaction, user_key: &[u8]) -> anyhow::Result<Self> {
         let master = load_master_key()?;
         let key = decrypt_user_key(user_key, &master)?;
         Ok(TransactionModel {

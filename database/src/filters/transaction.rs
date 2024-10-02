@@ -8,8 +8,7 @@ use crate::{impl_filterable, structs::range::Range};
 #[derive(Debug, Serialize, Deserialize, Default, Iterable)]
 pub struct Filter {
     pub id: Option<Uuid>,
-    pub from_account_id: Option<Uuid>,
-    pub to_account_id: Option<Uuid>,
+    pub account_id: Option<Uuid>,
     pub created_at: Option<Range<NaiveDateTime>>,
     #[serde(skip_serializing, default)]
     pub offset: Option<usize>,
@@ -19,7 +18,8 @@ pub struct Filter {
 
 impl_filterable!(
     Filter,
-    exact = [id, from_account_id, to_account_id],
+    exact = [id],
     range = [created_at],
+    multi_match = [(account_id, [from_account_id, to_account_id])],
     order_by = [(created_at, desc), (id, desc)]
 );

@@ -115,9 +115,11 @@ impl Service {
             operation: TransactionOperation::Deposit,
         };
 
-        self.transaction_repository
-            .create(db_pool, tx, &account, &transaction)
-            .await?;
+        if initial_balance > 0.0 {
+            self.transaction_repository
+                .create(db_pool, tx, &account, &transaction)
+                .await?;
+        }
 
         Ok(account)
     }

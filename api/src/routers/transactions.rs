@@ -3,13 +3,13 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Extension, Json, Router,
 };
 use database::{
     filters::transaction::Filter as TransactionFilter,
     models::{
-        transaction_dto::{TransactionCreate, TransactionModel},
+        transaction_dto::{TransactionCreate, TransactionModel, TransactionOperation},
         user_dto::User,
     },
     services::{
@@ -26,10 +26,9 @@ use crate::{
 };
 
 pub fn get_router() -> Router<Arc<ApplicationState>> {
-    Router::new().route(
-        "/accounts/:id/transactions",
-        get(get_account_transactions).post(create_account_transaction),
-    )
+    Router::new()
+        .route("/transactions", post(create_account_transaction))
+        .route("/accounts/:id/transactions", get(get_account_transactions))
     // .route(
     //     "/accounts/:id/transactions/:transaction_id",
     //     get(get_account_transaction).delete(delete_account_transaction),
@@ -73,7 +72,7 @@ pub async fn get_account_transactions(
             )),
         ));
     }
-    filters.to_account_id = Some(account.id);
+    filters.account_id = Some(account.id);
     filters.enforce_pagination();
 
     let (transactions, total) = transaction_service.get_all(&state.db_pool, &filters).await;
@@ -84,20 +83,42 @@ pub async fn get_account_transactions(
             let account_service = AccountService::new();
             let user_service = UserService::new();
             async move {
-                let account = account_service
-                    .get_one_by_id(&db_pool, &account_id)
+                let to_account = account_service
+                    .get_one_by_id(&db_pool, &transaction.to_account_id)
                     .await
                     .unwrap();
-                let user = user_service
-                    .get_one_by_id(&db_pool, &account.user_id)
+                let user_to = user_service
+                    .get_one_by_id(&db_pool, &to_account.user_id)
                     .await
                     .unwrap();
-                TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap()
+                let res = TransactionModel::from_dto(&transaction, &user_to.encryption_key);
+                if res.is_err() && transaction.from_account_id.is_some() {
+                    dbg!(format!("Error: {:?}", res));
+                    let from_account = account_service
+                        .get_one_by_id(&db_pool, &transaction.from_account_id.unwrap())
+                        .await
+                        .unwrap();
+                    let user_from = user_service
+                        .get_one_by_id(&db_pool, &from_account.user_id)
+                        .await
+                        .unwrap();
+
+                    let res_2 = TransactionModel::from_dto(&transaction, &user_from.encryption_key);
+
+                    dbg!(format!("Error2: {:?}", res_2));
+
+                    res_2
+                } else {
+                    res
+                }
             }
         })
         .buffered(10)
-        .collect::<Vec<TransactionModel>>()
-        .await;
+        .collect::<Vec<Result<TransactionModel, _>>>()
+        .await
+        .into_iter()
+        .filter_map(|x| x.ok())
+        .collect::<Vec<TransactionModel>>();
 
     match filters.offset {
         Some(offset) => {
@@ -113,7 +134,6 @@ pub async fn create_account_transaction(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,
     Extension(scopes): Extension<Vec<String>>,
-    Path(account_id): Path<Uuid>,
     Json(transaction): Json<TransactionCreate>,
 ) -> Result<Json<ReturnTypes<TransactionModel>>, (StatusCode, Json<HttpResponse>)> {
     let mut tx = state.db_pool.begin().await.unwrap();
@@ -121,8 +141,8 @@ pub async fn create_account_transaction(
     let account_service = AccountService::new();
     let user_service = UserService::new();
 
-    let account = match account_service
-        .get_one_by_id(&state.db_pool, &account_id)
+    let to_account = match account_service
+        .get_one_by_id(&state.db_pool, &transaction.to_account_id)
         .await
     {
         Some(account) => account,
@@ -138,39 +158,108 @@ pub async fn create_account_transaction(
         }
     };
 
-    if !scopes.contains(&"admin".to_string()) && account.user_id != current_user.id {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(HttpResponse::new(
-                StatusCode::FORBIDDEN.as_u16(),
-                "Forbidden".to_string(),
-                None,
-            )),
-        ));
+    match transaction.operation {
+        TransactionOperation::Withdrawal => {
+            if to_account.user_id != current_user.id {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(HttpResponse::new(
+                        StatusCode::FORBIDDEN.as_u16(),
+                        "Forbidden".to_string(),
+                        None,
+                    )),
+                ));
+            }
+        }
+        TransactionOperation::Transfer => {
+            let from_account_id = match &transaction.from_account_id {
+                Some(id) => id.clone(),
+                None => {
+                    return Err((
+                        StatusCode::BAD_REQUEST,
+                        Json(HttpResponse::new(
+                            StatusCode::BAD_REQUEST.as_u16(),
+                            "Transfer transactions need an origin account".to_string(),
+                            None,
+                        )),
+                    ))
+                }
+            };
+            let from_account = match account_service
+                .get_one_by_id(&state.db_pool, &from_account_id)
+                .await
+            {
+                Some(account) => account,
+                None => {
+                    return Err((
+                        StatusCode::NOT_FOUND,
+                        Json(HttpResponse::new(
+                            StatusCode::NOT_FOUND.as_u16(),
+                            "Account not found".to_string(),
+                            None,
+                        )),
+                    ))
+                }
+            };
+
+            if from_account.user_id != current_user.id {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(HttpResponse::new(
+                        StatusCode::FORBIDDEN.as_u16(),
+                        "Forbidden".to_string(),
+                        None,
+                    )),
+                ));
+            }
+        }
+        TransactionOperation::Interest | TransactionOperation::Fee => {
+            if !scopes.contains(&"admin".to_string()) {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    Json(HttpResponse::new(
+                        StatusCode::FORBIDDEN.as_u16(),
+                        "Forbidden".to_string(),
+                        None,
+                    )),
+                ));
+            }
+        }
+        _ => {}
     }
 
     let user = user_service
-        .get_one_by_id(&state.db_pool, &account.user_id)
+        .get_one_by_id(&state.db_pool, &to_account.user_id)
         .await
         .unwrap();
     match transaction_service
-        .create(&state.db_pool, &mut tx, &transaction)
+        .create(&state.db_pool, &mut tx, &transaction, &current_user.id)
         .await
     {
-        Ok(transaction) => {
-            let transaction_model =
-                TransactionModel::from_dto(&transaction, &user.encryption_key).unwrap();
-
-            tx.commit().await.unwrap();
-            Ok(Json(ReturnTypes::Single(transaction_model)))
-        }
-        Err(_) => {
+        Ok(transaction) => match TransactionModel::from_dto(&transaction, &user.encryption_key) {
+            Ok(transaction_model) => {
+                tx.commit().await.unwrap();
+                Ok(Json(ReturnTypes::Single(transaction_model)))
+            }
+            Err(e) => {
+                tx.rollback().await.unwrap();
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(HttpResponse::new(
+                        StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        format!("Error creating transaction: {}", e.to_string()),
+                        None,
+                    )),
+                ))
+            }
+        },
+        Err(e) => {
             tx.rollback().await.unwrap();
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(HttpResponse::new(
                     StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
-                    "Error creating transaction".to_string(),
+                    format!("Error creating transaction: {}", e),
                     None,
                 )),
             ))

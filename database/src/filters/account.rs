@@ -27,5 +27,6 @@ impl_filterable!(
         bank_agency_number
     ],
     range = [],
+    multi_match = [],
     order_by = [(created_at, asc), (id, asc)]
 );

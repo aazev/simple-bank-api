@@ -4,6 +4,7 @@ macro_rules! impl_filterable {
         $struct_name:ident,
         exact = [$($exact_field:ident),*],
         range = [$($range_field:ident),*],
+        multi_match = [ $( ( $value_field:ident, [ $( $table_field:ident ),* $(,)? ] ) ),* $(,)? ],
         order_by = [ $( ($order_field:ident, $order_direction:ident) ),* $(,)? ]
     ) => {
         use sqlx::{postgres::PgArguments, Arguments};
@@ -33,6 +34,16 @@ macro_rules! impl_filterable {
                         if range.end.is_some() {
                             conditions.push(format!("{} <= ${}", stringify!($range_field), conditions.len() + 1));
                         }
+                    }
+                )*
+
+                $(
+                    if self.$value_field.is_some() {
+                        let mut multi_conditions = Vec::new();
+                        $(
+                            multi_conditions.push(format!("{} = ${}", stringify!($table_field), conditions.len() + 1));
+                        )*
+                        conditions.push(format!("({})", multi_conditions.join(" OR ")));
                     }
                 )*
 
@@ -92,6 +103,16 @@ macro_rules! impl_filterable {
                     }
                 )*
 
+                $(
+                    if self.$value_field.is_some() {
+                        let mut multi_conditions = Vec::new();
+                        $(
+                            multi_conditions.push(format!("{} = ${}", stringify!($table_field), conditions.len() + 1));
+                        )*
+                        conditions.push(format!("({})", multi_conditions.join(" OR ")));
+                    }
+                )*
+
                 let where_clause = if conditions.is_empty() {
                     String::new()
                 } else {
@@ -122,6 +143,12 @@ macro_rules! impl_filterable {
                         if let Some(ref end) = range.end {
                             args.add(end);
                         }
+                    }
+                )*
+
+                $(
+                    if let Some(ref value) = self.$value_field {
+                        args.add(value);
                     }
                 )*
 

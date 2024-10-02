@@ -36,7 +36,7 @@ impl Account {
         bank_agency_number: Option<i32>,
         bank_agency_digit: Option<i32>,
         bank_account_type: Option<i32>,
-    ) -> Result<Self, anyhow::Error> {
+    ) -> anyhow::Result<Self> {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(Self {
@@ -54,7 +54,7 @@ impl Account {
         })
     }
 
-    pub fn get_balance(&self, user: &User) -> Result<f64, anyhow::Error> {
+    pub fn get_balance(&self, user: &User) -> anyhow::Result<f64> {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
         Ok(f64::decrypt(&self.balance, &key)?)
@@ -63,6 +63,10 @@ impl Account {
     pub fn update_balance(&mut self, user: &User, new_balance: f64) -> Result<(), anyhow::Error> {
         let master_key = load_master_key()?;
         let key = decrypt_user_key(&user.encryption_key, &master_key)?;
+        if new_balance < 0.0 {
+            return Err(anyhow::anyhow!("Not enough funds"));
+        }
+
         self.balance = new_balance.encrypt(&key)?;
 
         Ok(())

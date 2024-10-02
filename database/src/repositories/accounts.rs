@@ -154,48 +154,91 @@ impl AccountRepository {
         executor: &mut Transaction<'_, Postgres>,
         transaction: &TransactionCreate,
         amount: f64,
+        acting_user_id: &Uuid,
     ) -> anyhow::Result<Account> {
-        let mut account = self.find_by_id(db_pool, &transaction.to_account_id).await?;
-        let user = sqlx::query_as::<_, User>(
-            r#"
-            SELECT * FROM users
-            WHERE id = $1
-            "#,
-        )
-        .bind(account.user_id)
-        .fetch_one(&mut **executor)
-        .await?;
-
-        let balance = account.get_balance(&user)?;
-        let new_balance = match &transaction.operation {
-            TransactionOperation::Deposit => balance + amount,
-            TransactionOperation::Fee => balance - amount,
-            TransactionOperation::Interest => balance + amount,
-            TransactionOperation::Payment => balance - amount,
-            TransactionOperation::Withdrawal => balance - amount,
+        match &transaction.operation {
             TransactionOperation::Transfer => {
-                return Err(anyhow::anyhow!(
-                    "Transfer operations not allowed at the moment."
-                ))
+                let mut from_account = match transaction.from_account_id {
+                    Some(from_account_id) => self.find_by_id(db_pool, &from_account_id).await?,
+                    None => {
+                        return Err(anyhow::anyhow!(
+                            "Transfer operations must have a source account."
+                        ));
+                    }
+                };
+
+                if &from_account.user_id != acting_user_id {
+                    return Err(anyhow::anyhow!(
+                        "You are not allowed to perform this operation"
+                    ));
+                }
+
+                let mut to_account = self.find_by_id(db_pool, &transaction.to_account_id).await?;
+
+                let from_user = sqlx::query_as::<_, User>(r#"SELECT * FROM users WHERE id = $1"#)
+                    .bind(from_account.user_id)
+                    .fetch_one(&mut **executor)
+                    .await?;
+                let to_user = sqlx::query_as::<_, User>(r#"SELECT * FROM users WHERE id = $1"#)
+                    .bind(to_account.user_id)
+                    .fetch_one(&mut **executor)
+                    .await?;
+
+                let from_balance = from_account.get_balance(&from_user)?;
+                let to_balance = to_account.get_balance(&to_user)?;
+
+                let new_from_balance = from_balance - amount;
+                let new_to_balance = to_balance + amount;
+
+                from_account.update_balance(&from_user, new_from_balance)?;
+                to_account.update_balance(&to_user, new_to_balance)?;
+
+                sqlx::query(r#"UPDATE accounts SET balance = $2 WHERE id = $1"#)
+                    .bind(from_account.id)
+                    .bind(from_account.balance)
+                    .execute(&mut **executor)
+                    .await?;
+
+                let to_account = sqlx::query_as::<_, Account>(
+                    r#"UPDATE accounts SET balance = $2 WHERE id = $1 RETURNING *"#,
+                )
+                .bind(to_account.id)
+                .bind(to_account.balance)
+                .fetch_one(&mut **executor)
+                .await?;
+
+                Ok(to_account)
             }
-        };
+            _ => {
+                let mut to_account = self.find_by_id(db_pool, &transaction.to_account_id).await?;
+                let user = sqlx::query_as::<_, User>(r#"SELECT * FROM users WHERE id = $1"#)
+                    .bind(to_account.user_id)
+                    .fetch_one(&mut **executor)
+                    .await?;
 
-        account.update_balance(&user, new_balance)?;
+                let balance = to_account.get_balance(&user)?;
+                let new_balance = match &transaction.operation {
+                    TransactionOperation::Deposit => balance + amount,
+                    TransactionOperation::Fee => balance - amount,
+                    TransactionOperation::Interest => balance + amount,
+                    TransactionOperation::Payment => balance - amount,
+                    TransactionOperation::Withdrawal => balance - amount,
+                    _ => return Err(anyhow::anyhow!("Invalid operation")),
+                };
 
-        let account = sqlx::query_as::<_, Account>(
-            r#"
-            UPDATE accounts
-            SET balance = $2
-            WHERE id = $1
-            RETURNING *
-            "#,
-        )
-        .bind(account.id)
-        .bind(account.balance)
-        .fetch_one(&mut **executor)
-        .await?;
+                to_account.update_balance(&user, new_balance)?;
 
-        Ok(account)
+                let account = sqlx::query_as::<_, Account>(
+                    r#"UPDATE accounts SET balance = $2 WHERE id = $1 RETURNING *"#,
+                )
+                .bind(to_account.id)
+                .bind(to_account.balance)
+                .fetch_one(&mut **executor)
+                .await?;
+
+                Ok(account)
+            }
+        }
     }
 
     pub async fn delete(&self, executor: &mut Transaction<'_, Postgres>, id: &Uuid) -> bool {

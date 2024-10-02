@@ -57,9 +57,16 @@ impl Service {
         db_pool: &PgPool,
         db_tx: &mut SqlxTransaction<'_, Postgres>,
         transaction: &TransactionCreate,
+        current_user_id: &Uuid,
     ) -> anyhow::Result<Transaction> {
         self.account_repository
-            .update_balance(db_pool, db_tx, transaction, transaction.amount)
+            .update_balance(
+                db_pool,
+                db_tx,
+                transaction,
+                transaction.amount,
+                current_user_id,
+            )
             .await?;
 
         let account = self

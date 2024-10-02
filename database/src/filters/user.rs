@@ -19,5 +19,6 @@ impl_filterable!(
     Filter,
     exact = [id, name, email],
     range = [],
+    multi_match = [],
     order_by = [(created_at, asc), (id, asc)]
 );
