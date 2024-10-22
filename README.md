@@ -40,5 +40,4 @@ Please refer to the Swagger documentation at:
 * `/redoc` for redoc;
 * `/rapidoc` for rapidoc;
 
-
-!!!!! Scopes aren't fully implemented yet. !!!!!
+!!!!! Jobs and Scopes aren't fully implemented yet. !!!!!
