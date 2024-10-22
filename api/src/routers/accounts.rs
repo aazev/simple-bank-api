@@ -28,6 +28,21 @@ pub fn get_router() -> Router<Arc<ApplicationState>> {
         .route("/accounts/:id", get(get_account).delete(delete_account))
 }
 
+#[utoipa::path(
+    get,
+    path = "/accounts",
+    context_path = "/api/v1",
+    params(
+        ("id" = Option<Uuid>, Query, description = "Account ID"),
+        ("user_id" = Option<Uuid>, Query, description = "User ID"),
+        ("offset" = Option<usize>, Query, description = "Pagination offset"),
+        ("limit" = Option<usize>, Query, description = "Pagination limit"),
+    ),
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<AccountModel>),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn get_accounts(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,
@@ -76,6 +91,16 @@ pub async fn get_accounts(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/accounts",
+    context_path = "/api/v1",
+    request_body = AccountCreate,
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<AccountModel>),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn create_account(
     State(state): State<Arc<ApplicationState>>,
     Json(account): Json<AccountCreate>,
@@ -113,6 +138,17 @@ pub async fn create_account(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/accounts/:id",
+    context_path = "/api/v1",
+    params(("id" = Uuid, Path, description = "Account ID")),
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<AccountModel>),
+        (status = 404, description = "Account not found", body = HttpResponse, example = json!(r#"{"status": 404, "message": "Account not found"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn get_account(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,
@@ -160,6 +196,18 @@ pub async fn get_account(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/accounts/:id",
+    context_path = "/api/v1",
+    params(("id" = Uuid, Path, description = "Account ID")),
+    responses(
+        (status = 204, description = "Account deleted", body = HttpResponse, example = json!(r#"{"status": 200, "message": "Account deleted"}"#)),
+        (status = 403, description = "Forbidden", body = HttpResponse, example = json!(r#"{"status": 403, "message": "Forbidden"}"#)),
+        (status = 404, description = "Account not found", body = HttpResponse, example = json!(r#"{"status": 404, "message": "Account not found"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn delete_account(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,
@@ -194,7 +242,7 @@ pub async fn delete_account(
                 true => {
                     tx.commit().await.unwrap();
                     Ok(Json(HttpResponse::new(
-                        StatusCode::NO_CONTENT.as_u16(),
+                        StatusCode::OK.as_u16(),
                         "Account deleted".to_string(),
                         None,
                     )))

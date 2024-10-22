@@ -27,6 +27,22 @@ pub fn get_router() -> Router<Arc<ApplicationState>> {
         )
 }
 
+#[utoipa::path(
+    get,
+    path = "/users",
+    context_path = "/api/v1",
+    params(
+        ("id" = Option<Uuid>, Query, description = "User ID"),
+        ("name" = Option<String>, Query, description = "User name"),
+        ("email" = Option<String>, Query, description = "User email"),
+        ("offset" = Option<usize>, Query, description = "Pagination offset"),
+        ("limit" = Option<usize>, Query, description = "Pagination limit"),
+    ),
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<User>),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn get_users(
     State(state): State<Arc<ApplicationState>>,
     Query(mut filters): Query<UserFilter>,
@@ -47,6 +63,17 @@ pub async fn get_users(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/users/:id",
+    context_path = "/api/v1",
+    params(("id" = Uuid, Path, description = "User ID")),
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<User>),
+        (status = 404, description = "User not found", body = HttpResponse, example = json!(r#"{"status": 404, "message": "User not found"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn get_user(
     State(state): State<Arc<ApplicationState>>,
     Path(id): Path<Uuid>,
@@ -59,6 +86,16 @@ pub async fn get_user(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/users",
+    context_path = "/api/v1",
+    request_body = UserCreate,
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<User>),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn create_user(
     State(state): State<Arc<ApplicationState>>,
     Json(user): Json<UserCreate>,
@@ -78,6 +115,17 @@ pub async fn create_user(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/users/:id",
+    context_path = "/api/v1",
+    params(("id" = Uuid, Path, description = "User ID")),
+    request_body = UserCreate,
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<User>),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn update_user(
     State(state): State<Arc<ApplicationState>>,
     Path(id): Path<Uuid>,
@@ -98,6 +146,16 @@ pub async fn update_user(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/users/:id",
+    context_path = "/api/v1",
+    params(("id" = Uuid, Path, description = "User ID")),
+    responses(
+        (status = 200, description = "Successful response", body = HttpResponse, example = json!(r#"{"status": 200, "message": "User deleted successfully"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn delete_user(
     State(state): State<Arc<ApplicationState>>,
     Path(id): Path<Uuid>,

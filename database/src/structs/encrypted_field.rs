@@ -1,5 +1,5 @@
 use cipher::InvalidLength;
-use serde::{Deserialize, Serialize};
+use serde::{ser::StdError, Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,12 +44,15 @@ macro_rules! impl_sqlx_for_encrypted_field {
         }
 
         impl<'q> Encode<'q, Postgres> for EncryptedField<$t> {
-            fn encode_by_ref(&self, buf: &mut PgArgumentBuffer) -> IsNull {
+            fn encode_by_ref(
+                &self,
+                buf: &mut PgArgumentBuffer,
+            ) -> Result<IsNull, Box<(dyn StdError + Send + Sync + 'static)>> {
                 match bincode::serialize(self) {
                     Ok(serialized) => {
                         <Vec<u8> as Encode<Postgres>>::encode_by_ref(&serialized, buf)
                     }
-                    Err(_) => IsNull::Yes,
+                    Err(_) => Ok(IsNull::Yes),
                 }
             }
 

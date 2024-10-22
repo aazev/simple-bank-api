@@ -3,11 +3,12 @@ use chrono::NaiveDateTime;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{encrypt_user_key, generate_random_key, load_master_key};
 
-#[derive(Debug, Serialize, Deserialize, FromRow, Default, Clone)]
+#[derive(Debug, Serialize, Deserialize, FromRow, Default, Clone, ToSchema)]
 pub struct User {
     pub id: Uuid,
     pub name: String,
@@ -51,7 +52,7 @@ impl User {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UserCreate {
     pub name: String,
     pub email: String,

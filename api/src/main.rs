@@ -1,5 +1,6 @@
 use std::{env, net::SocketAddr, sync::Arc};
 
+use api_doc::ApiDoc;
 use axum::{
     http::{
         header::{ACCEPT, ACCESS_CONTROL_ALLOW_ORIGIN, AUTHORIZATION, CONTENT_TYPE, REFERER},
@@ -24,12 +25,17 @@ use tikv_jemallocator::Jemalloc;
 use tokio::{net::TcpListener, signal::ctrl_c};
 use tower::limit::ConcurrencyLimitLayer;
 use tower_http::cors::{Any, CorsLayer};
+use utoipa::OpenApi;
+use utoipa_rapidoc::RapiDoc;
+use utoipa_redoc::{Redoc, Servable};
+use utoipa_swagger_ui::SwaggerUi;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
 static GLOBAL: Jemalloc = Jemalloc;
 
-pub mod http;
+mod api_doc;
+mod http;
 mod middlewares;
 mod routers;
 mod state;
@@ -91,6 +97,11 @@ async fn async_main(threads: usize) {
     let transactions_router = get_transactions_router();
     let auth_router = get_auth_router();
 
+    let openapi_router = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
+        .merge(Redoc::with_url("/redoc", ApiDoc::openapi()))
+        .merge(RapiDoc::new("/api-docs/openapi.json").path("/rapidoc"));
+
     let protected_routers = Router::new()
         .merge(user_router)
         .merge(accounts_router)
@@ -106,6 +117,7 @@ async fn async_main(threads: usize) {
 
     // initialize routers
     let api = Router::new()
+        .merge(openapi_router)
         .nest("/api/v1", api_base)
         .fallback(deal_with_it);
 

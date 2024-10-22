@@ -22,6 +22,18 @@ pub fn get_router() -> Router<Arc<ApplicationState>> {
     Router::new().route("/auth", post(authorize_user))
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth",
+    context_path = "/api/v1",
+    request_body = AuthRequest,
+    responses(
+        (status = 200, description = "Successful authorization response", body = AuthResponse),
+        (status = 401, description = "Unauthorized", body = HttpResponse, example = json!(r#"{"status": 401, "message": "Invalid credentials"}"#)),
+        (status = 403, description = "Forbidden", body = HttpResponse, example = json!(r#"{"status": 403, "message": "Invalid credentials"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn authorize_user(
     State(state): State<Arc<ApplicationState>>,
     Json(payload): Json<AuthRequest>,

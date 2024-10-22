@@ -72,7 +72,7 @@ impl<T: Serialize> Default for HttpPaginatedResponse<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, ToSchema)]
 pub enum ReturnTypes<T> {
     Paginated(HttpPaginatedResponse<T>),
     Multiple(Vec<T>),
@@ -92,6 +92,7 @@ impl<T: Serialize> Serialize for ReturnTypes<T> {
     }
 }
 
+#[allow(dead_code)]
 pub fn validate_pagination(
     offset: Option<usize>,
     limit: Option<usize>,

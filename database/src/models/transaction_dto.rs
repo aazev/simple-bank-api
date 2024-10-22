@@ -5,9 +5,10 @@ use crate::{
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::{FromRow, Type};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Type)]
+#[derive(Debug, Serialize, Deserialize, Clone, Type, ToSchema)]
 #[sqlx(type_name = "transaction_operation", rename_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
 pub enum TransactionOperation {
@@ -56,7 +57,7 @@ impl Transaction {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TransactionCreate {
     pub operation: TransactionOperation,
     pub from_account_id: Option<Uuid>,
@@ -79,7 +80,7 @@ impl TransactionCreate {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TransactionModel {
     pub id: Uuid,
     pub operation: TransactionOperation,

@@ -35,6 +35,22 @@ pub fn get_router() -> Router<Arc<ApplicationState>> {
     // )
 }
 
+#[utoipa::path(
+    get,
+    path = "/accounts/:id/transactions",
+    context_path = "/api/v1",
+    params(
+        ("id" = Uuid, Path, description = "Account ID"),
+        ("offset" = Option<usize>, Query, description = "Pagination offset"),
+        ("limit" = Option<usize>, Query, description = "Pagination limit"),
+    ),
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<TransactionModel>),
+        (status = 404, description = "Account not found", body = HttpResponse, example = json!(r#"{"status": 404, "message": "Account not found"}"#)),
+        (status = 403, description = "Forbidden", body = HttpResponse, example = json!(r#"{"status": 403, "message": "Forbidden"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn get_account_transactions(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,
@@ -130,6 +146,19 @@ pub async fn get_account_transactions(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/transactions",
+    context_path = "/api/v1",
+    request_body = TransactionCreate,
+    responses(
+        (status = 200, description = "Successful response", body = ReturnTypes<TransactionModel>),
+        (status = 400, description = "Bad Request", body = HttpResponse, example = json!(r#"{"status": 400, "message": "Transfer transactions need an origin account"}"#)),
+        (status = 403, description = "Forbidden", body = HttpResponse, example = json!(r#"{"status": 403, "message": "Forbidden"}"#)),
+        (status = 404, description = "Account not found", body = HttpResponse, example = json!(r#"{"status": 404, "message": "Account not found"}"#)),
+        (status = 500, description = "Internal Server Error", body = HttpResponse, example = json!(r#"{"status": 500, "message": "Internal Server Error"}"#))
+    ),
+)]
 pub async fn create_account_transaction(
     State(state): State<Arc<ApplicationState>>,
     Extension(current_user): Extension<User>,

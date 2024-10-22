@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::{
@@ -73,7 +74,7 @@ impl Account {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AccountCreate {
     pub user_id: Uuid,
     pub bank_id: Option<i32>,
@@ -105,7 +106,7 @@ impl AccountCreate {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AccountModel {
     pub id: Uuid,
     pub user_id: Uuid,

@@ -130,25 +130,25 @@ macro_rules! impl_filterable {
 
                 $(
                     if let Some(ref value) = self.$exact_field {
-                        args.add(value);
+                        let _ = args.add(value);
                     }
                 )*
 
                 $(
                     if let Some(ref range) = self.$range_field {
                         if let Some(ref start) = range.start {
-                            args.add(start);
+                            let _ = args.add(start);
                         }
 
                         if let Some(ref end) = range.end {
-                            args.add(end);
+                            let _ = args.add(end);
                         }
                     }
                 )*
 
                 $(
                     if let Some(ref value) = self.$value_field {
-                        args.add(value);
+                        let _ = args.add(value);
                     }
                 )*
 

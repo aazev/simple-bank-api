@@ -22,3 +22,7 @@ sqlx = { workspace = true }
 struct_iterable = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
+utoipa = { workspace = true }
+utoipa-rapidoc = { workspace = true }
+utoipa-redoc = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
