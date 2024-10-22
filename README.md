@@ -40,4 +40,12 @@ Please refer to the Swagger documentation at:
 * `/redoc` for redoc;
 * `/rapidoc` for rapidoc;
 
+Only admin can create accounts for now. The application automatically creates an admin account with the following credentials:
+
+```json
+{
+  "email": "admin@localhost",
+  "password": "bank.administrator",
+}
+
 !!!!! Jobs and Scopes aren't fully implemented yet. !!!!!

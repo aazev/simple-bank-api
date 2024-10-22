@@ -6,6 +6,10 @@ use utoipa::ToSchema;
 pub struct AuthRequest {
     pub email: String,
     pub password: String,
+    #[schema(
+        default = "vec![]",
+        example = "['users', 'accounts', 'transactions', 'admin']"
+    )]
     pub scopes: Vec<String>,
 }
 
