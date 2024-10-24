@@ -47,5 +47,6 @@ Only admin can create accounts for now. The application automatically creates an
   "email": "admin@localhost",
   "password": "bank.administrator",
 }
+```
 
 !!!!! Jobs and Scopes aren't fully implemented yet. !!!!!
