@@ -29,10 +29,7 @@ impl Service {
 
     pub async fn get_one_by_id(&self, db_pool: &PgPool, id: &Uuid) -> Option<Transaction> {
         // if we had a logging system, we would log the error here
-        match self.transaction_repository.find_by_id(db_pool, id).await {
-            Ok(transaction) => Some(transaction),
-            Err(_) => None,
-        }
+        (self.transaction_repository.find_by_id(db_pool, id).await).ok()
     }
 
     pub async fn get_all(

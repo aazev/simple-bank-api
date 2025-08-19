@@ -34,10 +34,7 @@ impl Service {
 
     pub async fn get_one_by_id(&self, db_pool: &PgPool, id: &Uuid) -> Option<User> {
         // if we had a logging system, we would log the error here
-        match self.user_repository.find_by_id(db_pool, id).await {
-            Ok(user) => Some(user),
-            Err(_) => None,
-        }
+        (self.user_repository.find_by_id(db_pool, id).await).ok()
     }
 
     pub async fn get_one_by_email(&self, db_pool: &PgPool, email: &str) -> Option<User> {

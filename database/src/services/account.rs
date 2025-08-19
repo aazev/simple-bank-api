@@ -36,10 +36,7 @@ impl Service {
 
     pub async fn get_one_by_id(&self, db_pool: &PgPool, id: &Uuid) -> Option<Account> {
         // if we had a logging system, we would log the error here
-        match self.account_repository.find_by_id(db_pool, id).await {
-            Ok(account) => Some(account),
-            Err(_) => None,
-        }
+        (self.account_repository.find_by_id(db_pool, id).await).ok()
     }
 
     pub async fn get_all(&self, db_pool: &PgPool, filters: &AccountFilter) -> (Vec<Account>, u64) {
@@ -53,10 +50,7 @@ impl Service {
 
     pub async fn get_one_by_user_id(&self, db_pool: &PgPool, user_id: &Uuid) -> Option<Account> {
         // if we had a logging system, we would log the error here
-        match self.account_repository.find_by_id(db_pool, user_id).await {
-            Ok(account) => Some(account),
-            Err(_) => None,
-        }
+        (self.account_repository.find_by_id(db_pool, user_id).await).ok()
     }
 
     pub async fn get_one_by_user_email(&self, db_pool: &PgPool, email: &str) -> Option<Account> {
@@ -81,14 +75,11 @@ impl Service {
             ..Default::default()
         };
         // if we had a logging system, we would log the error here
-        match self
+        (self
             .account_repository
             .find_one_by_filter(db_pool, &filter)
-            .await
-        {
-            Ok(account) => Some(account),
-            Err(_) => None,
-        }
+            .await)
+            .ok()
     }
 
     pub async fn create(

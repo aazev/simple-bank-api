@@ -1,3 +1,4 @@
 target
 .container/data
 .env
+.bacon-locations
